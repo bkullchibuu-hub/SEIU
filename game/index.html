@@ -1,0 +1,1103 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Săn Gà Rừng</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap">
+<style>
+  :root {
+    color-scheme: dark;
+    --panel: rgba(22, 27, 20, 0.78);
+    --panel-edge: #c9a34a;
+    --ink: #f6efd8;
+    --ink-dim: #c9c1a6;
+    --hp: #e2463c;
+    --mp: #3c8fe2;
+    --exp: #e8c547;
+    --good: #7ed957;
+    --gold: #f2cf5b;
+    --font: "Baloo 2", "Segoe UI", system-ui, sans-serif;
+  }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; }
+  body {
+    margin: 0;
+    background: #2f5a22;
+    color: var(--ink);
+    font-family: var(--font);
+    overflow: hidden;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #game { position: fixed; inset: 0; }
+  #cv { display: block; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+
+  .panel {
+    background: var(--panel);
+    border: 1.5px solid var(--panel-edge);
+    border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  }
+
+  /* Status: top left */
+  #status {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    left: calc(10px + env(safe-area-inset-left, 0px));
+    display: flex; gap: 8px; align-items: center;
+    padding: 6px 10px 6px 6px;
+  }
+  #avatar {
+    width: 54px; height: 54px; border-radius: 50%;
+    border: 2px solid var(--panel-edge);
+    background: radial-gradient(circle at 50% 40%, #6d8f52, #2c4020);
+    flex: none;
+  }
+  .bars { display: grid; gap: 3px; width: 168px; }
+  .name { white-space: nowrap; font-size: 13px; font-weight: 700; line-height: 1; letter-spacing: 0.02em; }
+  .name b { color: var(--gold); }
+  .bar {
+    position: relative; height: 13px; border-radius: 7px;
+    background: rgba(0, 0, 0, 0.55); overflow: hidden;
+  }
+  .bar.thin { height: 6px; }
+  .bar i { position: absolute; inset: 0 auto 0 0; border-radius: 7px; transition: width 0.15s; }
+  .bar.hp i { background: linear-gradient(#f06b5f, var(--hp)); }
+  .bar.mp i { background: linear-gradient(#6cb0f5, var(--mp)); }
+  .bar.exp i { background: var(--exp); }
+  .bar span {
+    position: absolute; inset: 0; font-size: 10px; font-weight: 700; line-height: 13px;
+    text-align: center; text-shadow: 0 1px 2px #000; font-variant-numeric: tabular-nums;
+  }
+  .purse { display: flex; gap: 10px; font-size: 12px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  .purse b { color: var(--gold); }
+
+  /* Right column: minimap + quest */
+  #right {
+    position: absolute;
+    top: calc(10px + env(safe-area-inset-top, 0px));
+    right: calc(10px + env(safe-area-inset-right, 0px));
+    display: grid; gap: 8px; width: 190px;
+  }
+  #mapbox { padding: 6px; display: grid; gap: 4px; }
+  #mapbox .row { gap: 4px; white-space: nowrap; display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+  #zone { color: var(--ink); overflow: hidden; text-overflow: ellipsis; }
+  #mini { width: 100%; aspect-ratio: 3 / 2; border-radius: 6px; display: block; }
+  #quest { padding: 8px 10px; display: grid; gap: 2px; }
+  #quest .tag { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--panel-edge); }
+  #qTitle { font-size: 13px; font-weight: 700; line-height: 1.2; color: var(--gold); }
+  #qDesc { font-size: 12px; line-height: 1.3; display: flex; justify-content: space-between; gap: 6px; }
+  #qProg { font-weight: 800; font-variant-numeric: tabular-nums; }
+  #qProg.done { color: var(--good); }
+
+  /* Action buttons: bottom right */
+  #actions {
+    position: absolute;
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    width: 190px; height: 170px;
+  }
+  .btn {
+    position: absolute; border-radius: 50%;
+    border: 2px solid var(--panel-edge);
+    background: radial-gradient(circle at 50% 35%, #5b3a24, #2a1a10);
+    color: var(--ink); font-family: var(--font); font-weight: 800;
+    display: grid; place-items: center; cursor: pointer; padding: 0;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+    touch-action: none;
+  }
+  .btn:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+  .btn:active { transform: scale(0.94); }
+  .btn svg { width: 55%; height: 55%; pointer-events: none; }
+  .btn .cd {
+    position: absolute; inset: 0; border-radius: 50%; pointer-events: none;
+    background: conic-gradient(rgba(0,0,0,0.65) calc(var(--cd, 0) * 1turn), transparent 0);
+  }
+  .btn .key {
+    position: absolute; bottom: -4px; right: -2px; font-size: 10px; line-height: 1;
+    background: #1b140c; border: 1px solid var(--panel-edge); border-radius: 5px; padding: 2px 4px;
+  }
+  .btn .count {
+    position: absolute; top: -4px; right: -4px; min-width: 18px; font-size: 11px; line-height: 18px;
+    background: var(--hp); border-radius: 9px; padding: 0 4px; text-align: center;
+  }
+  #bAtk { width: 84px; height: 84px; right: 0; bottom: 0; background: radial-gradient(circle at 50% 35%, #b8322a, #5a120e); }
+  #bSkill { width: 60px; height: 60px; right: 94px; bottom: 6px; background: radial-gradient(circle at 50% 35%, #2e6db0, #0f2a4a); }
+  #bPot { width: 52px; height: 52px; right: 82px; bottom: 76px; }
+  #bAuto { width: 52px; height: 52px; right: 16px; bottom: 98px; font-size: 12px; }
+  #bAuto.on { background: radial-gradient(circle at 50% 35%, #caa53a, #6b5212); color: #1a1206; box-shadow: 0 0 16px rgba(242, 207, 91, 0.8); }
+
+  #hint {
+    position: absolute; left: calc(10px + env(safe-area-inset-left, 0px)); bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+    padding: 6px 10px; font-size: 12px; line-height: 1.5; color: var(--ink-dim);
+  }
+  #hint b { color: var(--ink); }
+  @media (hover: none) { #hint, .btn .key { display: none; } }
+
+  #reset {
+    margin-left: auto;
+    font: 700 10px var(--font); color: var(--ink-dim);
+    background: transparent; border: 1px solid rgba(201, 163, 74, 0.5); border-radius: 6px;
+    padding: 0 6px; cursor: pointer; line-height: 16px;
+  }
+  #reset.armed { color: #fff; background: #8a241d; }
+
+  #stick {
+    position: absolute; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.45); background: rgba(0, 0, 0, 0.18); pointer-events: none;
+  }
+  #knob {
+    position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+    border-radius: 50%; background: rgba(255, 255, 255, 0.55);
+  }
+
+  #toast {
+    position: absolute; left: 50%; top: calc(18% + env(safe-area-inset-top, 0px)); transform: translateX(-50%);
+    display: grid; gap: 6px; justify-items: center; pointer-events: none; width: min(90vw, 460px);
+  }
+  .msg {
+    padding: 6px 16px; border-radius: 20px; background: rgba(15, 18, 12, 0.82);
+    border: 1px solid var(--panel-edge); font-weight: 700; font-size: 15px; text-align: center;
+    animation: msg 3s ease forwards;
+  }
+  .msg.big { font-size: 22px; color: var(--gold); padding: 8px 22px; }
+  @keyframes msg { 0% { opacity: 0; transform: translateY(8px) scale(0.95); } 8% { opacity: 1; transform: none; } 80% { opacity: 1; } 100% { opacity: 0; transform: translateY(-10px); } }
+
+  #dead {
+    position: absolute; inset: 0; display: grid; place-content: center; text-align: center; gap: 4px;
+    background: rgba(40, 0, 0, 0.55); font-size: 30px; font-weight: 800;
+  }
+  #dead small { font-size: 15px; font-weight: 500; color: var(--ink-dim); }
+
+  @media (max-width: 640px) {
+    #right { width: 132px; }
+    #quest { padding: 6px 8px; }
+    #qTitle { font-size: 12px; }
+    #qDesc { font-size: 11px; }
+    .bars { width: 130px; }
+    #avatar { width: 44px; height: 44px; }
+    .name { font-size: 12px; }
+    .purse { font-size: 11px; gap: 6px; }
+    #toast { top: calc(34% + env(safe-area-inset-top, 0px)); }
+  }
+  @media (prefers-reduced-motion: reduce) { .msg { animation-duration: 3s; animation-timing-function: step-end; } }
+</style>
+</head>
+<body>
+
+<div id="game">
+  <canvas id="cv" aria-label="Bản đồ trò chơi"></canvas>
+
+  <div id="status" class="panel">
+    <canvas id="avatar" width="108" height="108"></canvas>
+    <div class="bars">
+      <div class="name">Kiếm Khách · <b id="lv">Lv.1</b></div>
+      <div class="bar hp"><i id="hpBar"></i><span id="hpTxt"></span></div>
+      <div class="bar mp"><i id="mpBar"></i><span id="mpTxt"></span></div>
+      <div class="bar thin exp"><i id="expBar"></i></div>
+      <div class="purse"><span>Vàng <b id="gold">0</b></span><span>Hạ <b id="kills">0</b></span><button id="reset" type="button">Chơi lại</button></div>
+    </div>
+  </div>
+
+  <div id="right">
+    <div id="mapbox" class="panel">
+      <div class="row"><span id="zone">Làng Khởi Đầu</span><span id="coord">0, 0</span></div>
+      <canvas id="mini" width="180" height="120"></canvas>
+    </div>
+    <div id="quest" class="panel">
+      <div class="tag">Nhiệm vụ chính</div>
+      <div id="qTitle"></div>
+      <div id="qDesc"><span id="qText"></span><span id="qProg"></span></div>
+    </div>
+  </div>
+
+  <div id="hint" class="panel">
+    <b>WASD / mũi tên</b> di chuyển · <b>Click</b> chuột để đi / chọn gà<br>
+    <b>J</b> chém · <b>K</b> kiếm xoáy · <b>H</b> ăn đùi gà · <b>Space</b> tự động
+  </div>
+
+  <div id="actions">
+    <button class="btn" id="bAuto" type="button" aria-label="Tự động đánh">AUTO<span class="key">Space</span></button>
+    <button class="btn" id="bPot" type="button" aria-label="Ăn đùi gà hồi máu">
+      <svg viewBox="0 0 24 24"><path d="M14.5 3.5c3.3 0 6 2.7 6 6 0 3-2.3 5.6-5.3 5.9l-3.4 3.4a2 2 0 1 1-2.6 2.6 2 2 0 1 1-2.6-2.6 2 2 0 1 1 2.6-2.6l3.4-3.4c.3-3 2.9-5.3 5.9-5.3" fill="#d98a3d" stroke="#5a3210" stroke-width="1.2"/><circle cx="15" cy="9" r="2" fill="#f2b06a"/></svg>
+      <span class="count" id="potN">3</span><span class="key">H</span><span class="cd" id="potCd"></span>
+    </button>
+    <button class="btn" id="bSkill" type="button" aria-label="Kiếm xoáy">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#dff0ff" stroke-width="2" stroke-linecap="round"><path d="M12 3a9 9 0 1 1-8.5 6"/><path d="M12 7a5 5 0 1 1-4.7 3.3"/><path d="M3.5 9 2 5.5M3.5 9 7 8"/></svg>
+      <span class="key">K</span><span class="cd" id="skCd"></span>
+    </button>
+    <button class="btn" id="bAtk" type="button" aria-label="Chém">
+      <svg viewBox="0 0 24 24"><path d="M20 3 9.5 13.5l1 1L21 4V3z" fill="#e8eef5" stroke="#6b7785" stroke-width=".8"/><path d="M7 12l5 5-1.5 1.5-5-5z" fill="#d6a938"/><path d="M6.5 15.5l2 2L5 21l-2-2z" fill="#4a2c16"/></svg>
+      <span class="key">J</span>
+    </button>
+  </div>
+
+  <div id="stick" hidden><div id="knob"></div></div>
+  <div id="toast"></div>
+  <div id="dead" hidden>Bạn đã gục ngã!<small>Hồi sinh ở làng sau <span id="deadT">3</span> giây…</small></div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+  const W = 2400, H = 1600;
+  const VILLAGE = { x: 230, y: 800 };
+  const $ = (id) => document.getElementById(id);
+  const cv = $("cv"), ctx = cv.getContext("2d");
+  const FONT = '"Baloo 2", "Segoe UI", system-ui, sans-serif';
+
+  // ---------- helpers ----------
+  let seed = 20260926;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const R = (a, b) => a + Math.random() * (b - a);
+  const RI = (a, b) => Math.floor(R(a, b + 1));
+  const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+  const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const angDiff = (a, b) => Math.abs(Math.atan2(Math.sin(a - b), Math.cos(a - b)));
+
+  function bez(p0, p1, p2, p3, t) {
+    const u = 1 - t;
+    return {
+      x: u*u*u*p0[0] + 3*u*u*t*p1[0] + 3*u*t*t*p2[0] + t*t*t*p3[0],
+      y: u*u*u*p0[1] + 3*u*u*t*p1[1] + 3*u*t*t*p2[1] + t*t*t*p3[1],
+    };
+  }
+  const PATHS = [
+    [[260, 800], [900, 760], [1500, 380], [2330, 260]],
+    [[560, 820], [760, 1050], [620, 1350], [820, 1580]],
+    [[1350, 560], [1600, 800], [1900, 1000], [2300, 1250]],
+  ];
+  const pathPts = [];
+  for (const p of PATHS) for (let t = 0; t <= 1; t += 0.02) pathPts.push(bez(...p, t));
+  const nearPath = (x, y, d) => pathPts.some((p) => Math.hypot(p.x - x, p.y - y) < d);
+
+  // ---------- world ----------
+  const obstacles = []; // {x,y,r}
+  const props = [];     // drawn y-sorted
+
+  const ground = document.createElement("canvas");
+  ground.width = W; ground.height = H;
+  (function buildGround() {
+    const g = ground.getContext("2d");
+    g.fillStyle = "#5f9f3e"; g.fillRect(0, 0, W, H);
+    const greens = ["#67a843", "#58953a", "#6fae4a", "#528c35", "#4f8a36"];
+    g.globalAlpha = 0.35;
+    for (let i = 0; i < 280; i++) {
+      g.fillStyle = greens[Math.floor(rnd() * greens.length)];
+      g.beginPath(); g.arc(rnd() * W, rnd() * H, 40 + rnd() * 140, 0, 7); g.fill();
+    }
+    g.globalAlpha = 1;
+    const eg = g.createLinearGradient(1450, 0, 1950, 0);
+    eg.addColorStop(0, "rgba(18,58,52,0)"); eg.addColorStop(1, "rgba(18,58,52,0.32)");
+    g.fillStyle = eg; g.fillRect(1450, 0, W - 1450, H);
+
+    g.lineCap = "round"; g.lineJoin = "round";
+    for (const [w, c] of [[70, "#9c7044"], [56, "#c4955e"], [30, "#cfa36c"]]) {
+      g.strokeStyle = c; g.lineWidth = w;
+      for (const p of PATHS) { g.beginPath(); g.moveTo(...p[0]); g.bezierCurveTo(...p[1], ...p[2], ...p[3]); g.stroke(); }
+    }
+    // village plaza
+    g.fillStyle = "#9c7044"; g.beginPath(); g.ellipse(VILLAGE.x, VILLAGE.y, 186, 146, 0, 0, 7); g.fill();
+    g.fillStyle = "#c9a06a"; g.beginPath(); g.ellipse(VILLAGE.x, VILLAGE.y, 176, 136, 0, 0, 7); g.fill();
+    g.fillStyle = "#b48a57";
+    for (let i = 0; i < 26; i++) { const a = (i / 26) * Math.PI * 2; g.beginPath(); g.arc(VILLAGE.x + Math.cos(a) * 60, VILLAGE.y + Math.sin(a) * 46, 7, 0, 7); g.fill(); }
+    // well
+    g.fillStyle = "#777"; g.beginPath(); g.arc(VILLAGE.x, VILLAGE.y, 22, 0, 7); g.fill();
+    g.fillStyle = "#2c5a8a"; g.beginPath(); g.arc(VILLAGE.x, VILLAGE.y, 14, 0, 7); g.fill();
+    obstacles.push({ x: VILLAGE.x, y: VILLAGE.y, r: 22 });
+    // pebbles on paths
+    g.fillStyle = "rgba(120,90,60,0.5)";
+    for (const p of pathPts) for (let k = 0; k < 2; k++) { g.beginPath(); g.arc(p.x + R(-22, 22), p.y + R(-22, 22), R(1.5, 3.5), 0, 7); g.fill(); }
+    // grass tufts
+    for (let i = 0; i < 3200; i++) {
+      const x = rnd() * W, y = rnd() * H;
+      if (nearPath(x, y, 34) || Math.hypot(x - VILLAGE.x, y - VILLAGE.y) < 180) continue;
+      const east = x > 1650;
+      g.strokeStyle = rnd() < 0.6 ? (east ? "#2f6a38" : "#3f7a2a") : (east ? "#5e9e66" : "#86c65a");
+      g.lineWidth = 1.6;
+      const h = 6 + rnd() * 8;
+      g.beginPath();
+      g.moveTo(x - 4, y - h * 0.7); g.lineTo(x, y);
+      g.lineTo(x + 1, y - h); g.moveTo(x, y); g.lineTo(x + 5, y - h * 0.75);
+      g.stroke();
+    }
+    // flowers
+    const fcol = ["#fff7e0", "#ffe066", "#ff9fc4", "#c7a6ff"];
+    for (let i = 0; i < 360; i++) {
+      const x = rnd() * W, y = rnd() * H;
+      if (nearPath(x, y, 34)) continue;
+      g.fillStyle = fcol[Math.floor(rnd() * fcol.length)];
+      g.beginPath(); g.arc(x, y, 2.4, 0, 7); g.fill();
+    }
+    // rocks
+    for (let i = 0; i < 34; i++) {
+      const x = 80 + rnd() * (W - 160), y = 80 + rnd() * (H - 160);
+      if (nearPath(x, y, 60) || Math.hypot(x - VILLAGE.x, y - VILLAGE.y) < 230) continue;
+      const r = 10 + rnd() * 10;
+      g.fillStyle = "rgba(0,0,0,0.2)"; g.beginPath(); g.ellipse(x + 3, y + 4, r * 1.1, r * 0.6, 0, 0, 7); g.fill();
+      g.fillStyle = "#8d9296"; g.beginPath();
+      for (let k = 0; k < 7; k++) { const a = (k / 7) * Math.PI * 2, rr = r * (0.8 + rnd() * 0.3); g.lineTo(x + Math.cos(a) * rr, y + Math.sin(a) * rr * 0.75); }
+      g.fill();
+      g.fillStyle = "#b3b8bb"; g.beginPath(); g.ellipse(x - r * 0.25, y - r * 0.25, r * 0.4, r * 0.25, -0.4, 0, 7); g.fill();
+      obstacles.push({ x, y, r: r * 0.9 });
+    }
+    // fences along the main path
+    for (let t = 0.12; t < 0.95; t += 0.11) {
+      const a = bez(...PATHS[0], t), b = bez(...PATHS[0], t + 0.035);
+      for (const off of [-52, 52]) {
+        g.strokeStyle = "#6b4526"; g.lineWidth = 4;
+        g.beginPath(); g.moveTo(a.x, a.y + off); g.lineTo(b.x, b.y + off); g.stroke();
+        g.fillStyle = "#553418";
+        g.fillRect(a.x - 3, a.y + off - 12, 6, 16); g.fillRect(b.x - 3, b.y + off - 12, 6, 16);
+      }
+    }
+  })();
+
+  // trees & houses
+  (function buildProps() {
+    const houses = [[120, 640], [330, 630], [120, 960], [350, 980]];
+    for (const [x, y] of houses) { props.push({ kind: "house", x, y, hue: rnd() }); obstacles.push({ x, y: y - 6, r: 42 }); }
+    props.push({ kind: "sign", x: 470, y: 770 });
+    let placed = 0, tries = 0;
+    while (placed < 95 && tries < 3000) {
+      tries++;
+      const east = rnd() < 0.5;
+      const x = east ? 1600 + rnd() * 780 : 30 + rnd() * (W - 60);
+      const y = 30 + rnd() * (H - 60);
+      if (nearPath(x, y, 70) || Math.hypot(x - VILLAGE.x, y - VILLAGE.y) < 260) continue;
+      if (obstacles.some((o) => Math.hypot(o.x - x, o.y - y) < o.r + 40)) continue;
+      const pink = !east && rnd() < 0.12;
+      props.push({ kind: "tree", x, y, s: 0.8 + rnd() * 0.5, pink, dark: x > 1650 });
+      obstacles.push({ x, y: y - 4, r: 14 });
+      placed++;
+    }
+  })();
+
+  function drawHouse(p) {
+    ctx.save(); ctx.translate(p.x, p.y);
+    ctx.fillStyle = "rgba(0,0,0,0.22)"; ctx.beginPath(); ctx.ellipse(6, 4, 58, 16, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#e8d6b0"; ctx.fillRect(-44, -48, 88, 50);
+    ctx.fillStyle = "#6b4526"; ctx.fillRect(-10, -26, 20, 28);
+    ctx.fillStyle = "#86b4d8"; ctx.fillRect(-36, -38, 16, 14); ctx.fillRect(20, -38, 16, 14);
+    ctx.fillStyle = p.hue < 0.5 ? "#b8432f" : "#3f6fa0";
+    ctx.beginPath(); ctx.moveTo(-56, -44); ctx.lineTo(0, -90); ctx.lineTo(56, -44); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = "rgba(0,0,0,0.25)"; ctx.lineWidth = 2; ctx.stroke();
+    ctx.restore();
+  }
+  function drawSign(p) {
+    ctx.save(); ctx.translate(p.x, p.y);
+    ctx.fillStyle = "#553418"; ctx.fillRect(-3, -34, 6, 34);
+    ctx.fillStyle = "#8a5a30"; ctx.fillRect(-40, -46, 80, 20);
+    ctx.fillStyle = "#f6efd8"; ctx.font = `700 11px ${FONT}`; ctx.textAlign = "center";
+    ctx.fillText("Đồng Cỏ →", 0, -32);
+    ctx.restore();
+  }
+  function drawTree(p) {
+    ctx.save(); ctx.translate(p.x, p.y); ctx.scale(p.s, p.s);
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(8, 2, 40, 13, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#5b3a20"; ctx.fillRect(-7, -34, 14, 36);
+    const c = p.pink ? ["#d9749a", "#f0a2c0", "#ffc9dc"] : p.dark ? ["#1f4d33", "#2d6644", "#3f7d55"] : ["#2f6b26", "#3f8a31", "#58a843"];
+    const blobs = [[0, -62, 34], [-24, -48, 24], [24, -48, 24], [-12, -80, 22], [14, -78, 22]];
+    ctx.fillStyle = c[0]; for (const [x, y, r] of blobs) { ctx.beginPath(); ctx.arc(x, y + 4, r, 0, 7); ctx.fill(); }
+    ctx.fillStyle = c[1]; for (const [x, y, r] of blobs) { ctx.beginPath(); ctx.arc(x - 2, y, r * 0.85, 0, 7); ctx.fill(); }
+    ctx.fillStyle = c[2]; ctx.beginPath(); ctx.arc(-10, -74, 12, 0, 7); ctx.fill();
+    ctx.restore();
+  }
+
+  // ---------- enemies ----------
+  const ET = {
+    ga:    { name: "Gà rừng",      hp: 40,   atk: 4,  exp: 14,  gold: [1, 3],     lv: [1, 3],   speed: 42, chase: 100, col: "#f6f2ea", wing: "#e4dccb", zone: [470, 1640, 60, H - 60], aggressive: false, size: 1,    r: 12, drop: 0.3 },
+    trong: { name: "Gà trống lửa", hp: 120,  atk: 9,  exp: 34,  gold: [4, 8],     lv: [4, 6],   speed: 46, chase: 108, col: "#e0703a", wing: "#b8481f", zone: [1700, W - 60, 60, H - 60], aggressive: true, size: 1.3, r: 15, drop: 0.4 },
+    boss:  { name: "Vua Gà",       hp: 1100, atk: 16, exp: 480, gold: [120, 160], lv: [10, 10], speed: 58, chase: 96,  col: "#f0c84a", wing: "#c7922a", zone: [2050, 2300, 150, 380], aggressive: true, size: 2.5, r: 34, drop: 1 },
+  };
+  const COUNT = { ga: 16, trong: 8 };
+  let enemies = [];
+  let respawns = [];
+
+  function freeSpot(z, r) {
+    for (let i = 0; i < 60; i++) {
+      const x = R(z[0], z[1]), y = R(z[2], z[3]);
+      if (!obstacles.some((o) => Math.hypot(o.x - x, o.y - y) < o.r + r + 6)) return { x, y };
+    }
+    return { x: (z[0] + z[1]) / 2, y: (z[2] + z[3]) / 2 };
+  }
+  function spawn(type) {
+    const T = ET[type];
+    const lv = RI(T.lv[0], T.lv[1]);
+    const hp = Math.round(T.hp * (1 + 0.18 * (lv - T.lv[0])));
+    const s = freeSpot(T.zone, T.r);
+    enemies.push({
+      type, T, lv, x: s.x, y: s.y, hx: s.x, hy: s.y, hp, maxHp: hp, atk: T.atk + (lv - T.lv[0]) * 2,
+      vx: 0, vy: 0, face: 1, state: "wander", t: R(0.5, 2), hitT: 0, atkCd: 0.6, peck: 0, walk: R(0, 6),
+      slamCd: 4, slam: null, dead: false,
+    });
+  }
+
+  // ---------- player & progress ----------
+  const QUESTS = [
+    { title: "Bước đầu ở đồng cỏ", text: "Hạ Gà rừng", type: "ga", need: 5, exp: 60, pot: 3, gold: 20 },
+    { title: "Lửa trong rừng sương", text: "Hạ Gà trống lửa (phía đông)", type: "trong", need: 4, exp: 170, pot: 3, gold: 60 },
+    { title: "Vua của bầy gà", text: "Đánh bại Vua Gà (góc đông bắc)", type: "boss", need: 1, exp: 500, pot: 5, gold: 200 },
+  ];
+  const REPEAT = { title: "Thợ săn gà", text: "Hạ gà bất kỳ", type: "any", need: 15, exp: 260, pot: 3, gold: 80 };
+  const quest = () => QUESTS[S.qi] || REPEAT;
+
+  const S = { lv: 1, exp: 0, gold: 0, pot: 3, qi: 0, qp: 0, kills: 0 };
+  const P = {
+    x: VILLAGE.x + 70, y: VILLAGE.y + 20, face: 1, aim: 0, hp: 0, maxHp: 0, mp: 0, maxMp: 0, atk: 0,
+    atkCd: 0, swing: 0, skCd: 0, potCd: 0, spin: 0, combatT: 0, walk: 0, moving: false,
+    target: null, moveTo: null, dead: false, deadT: 0,
+  };
+  const expNeed = (lv) => 45 + lv * lv * 28;
+  function applyStats(full) {
+    P.maxHp = 100 + (S.lv - 1) * 20;
+    P.maxMp = 30 + (S.lv - 1) * 4;
+    P.atk = 12 + (S.lv - 1) * 3.5;
+    if (full) { P.hp = P.maxHp; P.mp = P.maxMp; }
+  }
+
+  const SAVE_KEY = "san-ga-rung-v1";
+  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(S)); } catch (e) {} }
+  function load() {
+    try {
+      const d = JSON.parse(localStorage.getItem(SAVE_KEY) || "null");
+      if (d && typeof d.lv === "number") Object.assign(S, d);
+    } catch (e) {}
+  }
+
+  // ---------- effects ----------
+  const texts = [];   // floating numbers
+  const parts = [];   // feathers / sparks
+  const rings = [];   // skill rings
+  let clickMark = null;
+
+  function floatText(x, y, text, color, size = 18) {
+    texts.push({ x: x + R(-8, 8), y, text, color, size, t: 0, life: 0.9 });
+  }
+  function feathers(x, y, col, n = 6) {
+    for (let i = 0; i < n; i++) {
+      parts.push({ x, y: y - 12, vx: R(-70, 70), vy: R(-120, -30), t: 0, life: R(0.6, 1.1), col, rot: R(0, 6), vr: R(-6, 6) });
+    }
+  }
+  function toast(msg, big) {
+    const el = document.createElement("div");
+    el.className = "msg" + (big ? " big" : "");
+    el.textContent = msg;
+    $("toast").appendChild(el);
+    setTimeout(() => el.remove(), 3000);
+    while ($("toast").children.length > 3) $("toast").firstChild.remove();
+  }
+
+  // ---------- combat ----------
+  function gainExp(n) {
+    S.exp += n;
+    let up = false;
+    while (S.exp >= expNeed(S.lv)) { S.exp -= expNeed(S.lv); S.lv++; up = true; }
+    if (up) {
+      applyStats(true);
+      toast(`LÊN CẤP ${S.lv}!`, true);
+      rings.push({ x: P.x, y: P.y, t: 0, life: 0.8, r: 90, col: "242,207,91" });
+    }
+  }
+
+  function damageEnemy(e, base) {
+    const crit = Math.random() < 0.15;
+    const dmg = Math.max(1, Math.round(base * R(0.85, 1.15) * (crit ? 1.8 : 1)));
+    e.hp -= dmg; e.hitT = 0.15;
+    const a = Math.atan2(e.y - P.y, e.x - P.x);
+    const kb = e.type === "boss" ? 4 : 14;
+    e.x += Math.cos(a) * kb; e.y += Math.sin(a) * kb;
+    floatText(e.x, e.y - 30 * e.T.size, crit ? `${dmg}!` : `${dmg}`, crit ? "#ffd84a" : "#ffffff", crit ? 26 : 20);
+    feathers(e.x, e.y, e.T.wing, 3);
+    if (e.state !== "aggro") e.state = "aggro";
+    P.combatT = 4;
+    if (e.hp <= 0) killEnemy(e);
+  }
+
+  function killEnemy(e) {
+    e.dead = true;
+    feathers(e.x, e.y, e.T.col, e.type === "boss" ? 30 : 12);
+    const T = e.T;
+    const exp = Math.round(T.exp * (1 + 0.15 * (e.lv - T.lv[0])));
+    const gold = RI(T.gold[0], T.gold[1]);
+    S.gold += gold; S.kills++;
+    floatText(e.x, e.y - 50, `+${exp} EXP`, "#e8c547", 15);
+    if (Math.random() < T.drop) { S.pot++; floatText(e.x, e.y - 68, "+1 Đùi gà", "#f2a55a", 15); }
+    if (e.type === "boss") toast("Vua Gà đã bị hạ gục!", true);
+    gainExp(exp);
+    const q = quest();
+    if (q.type === e.type || q.type === "any") {
+      S.qp++;
+      if (S.qp >= q.need) {
+        toast(`Hoàn thành: ${q.title}`, true);
+        toast(`Thưởng: ${q.exp} EXP · ${q.pot} đùi gà · ${q.gold} vàng`);
+        S.gold += q.gold; S.pot += q.pot;
+        gainExp(q.exp);
+        S.qi++; S.qp = 0;
+        const nq = quest();
+        setTimeout(() => toast(`Nhiệm vụ mới: ${nq.title}`), 1200);
+        if (nq.type === "boss" && !enemies.some((x) => x.type === "boss")) spawnBoss();
+      }
+    }
+    if (P.target === e) P.target = null;
+    if (e.type === "boss") respawns.push({ type: "boss", t: 90 });
+    else respawns.push({ type: e.type, t: R(4, 7) });
+    save();
+  }
+
+  function spawnBoss() {
+    spawn("boss");
+    toast("Vua Gà đã xuất hiện ở góc đông bắc!");
+  }
+
+  function hurtPlayer(n) {
+    if (P.dead) return;
+    n = Math.round(n);
+    P.hp -= n; P.combatT = 4;
+    floatText(P.x, P.y - 58, `-${n}`, "#ff6b5e", 18);
+    if (P.hp <= 0) {
+      P.hp = 0; P.dead = true; P.deadT = 3; P.target = null; P.moveTo = null;
+      S.exp = Math.max(0, Math.round(S.exp * 0.9));
+      $("dead").hidden = false;
+      for (const e of enemies) if (e.state === "aggro") e.state = "return";
+    }
+  }
+
+  function nearestEnemy(maxD, filter) {
+    let best = null, bd = maxD;
+    for (const e of enemies) {
+      if (e.dead || (filter && !filter(e))) continue;
+      const d = dist(e, P);
+      if (d < bd) { bd = d; best = e; }
+    }
+    return best;
+  }
+
+  function attack() {
+    if (P.dead || P.atkCd > 0) return;
+    const tgt = P.target && !P.target.dead ? P.target : nearestEnemy(100);
+    if (tgt) { P.aim = Math.atan2(tgt.y - P.y, tgt.x - P.x); if (Math.abs(tgt.x - P.x) > 4) P.face = tgt.x > P.x ? 1 : -1; }
+    P.atkCd = 0.42; P.swing = 0.22;
+    for (const e of enemies) {
+      if (e.dead) continue;
+      const d = dist(e, P);
+      if (d > 62 + e.T.r) continue;
+      const a = Math.atan2(e.y - P.y, e.x - P.x);
+      if (d < 34 || angDiff(a, P.aim) < 1.25) damageEnemy(e, P.atk);
+    }
+  }
+
+  function skill() {
+    if (P.dead || P.skCd > 0) return;
+    if (P.mp < 10) { floatText(P.x, P.y - 60, "Thiếu MP", "#6cb0f5", 15); return; }
+    P.mp -= 10; P.skCd = 4; P.spin = 0.45; P.swing = 0.22;
+    rings.push({ x: P.x, y: P.y - 14, t: 0, life: 0.4, r: 120, col: "150,210,255" });
+    for (const e of enemies) if (!e.dead && dist(e, P) < 120 + e.T.r) damageEnemy(e, P.atk * 1.7);
+  }
+
+  function potion() {
+    if (P.dead || P.potCd > 0 || S.pot <= 0 || P.hp >= P.maxHp) return;
+    S.pot--; P.potCd = 1;
+    const h = Math.round(P.maxHp * 0.45);
+    P.hp = Math.min(P.maxHp, P.hp + h);
+    floatText(P.x, P.y - 60, `+${h}`, "#7ed957", 20);
+    save();
+  }
+
+  let auto = false;
+  function setAuto(v) {
+    auto = v;
+    $("bAuto").classList.toggle("on", auto);
+    toast(auto ? "Đã bật tự động" : "Đã tắt tự động");
+    if (!auto) { P.target = null; P.moveTo = null; }
+  }
+
+  // ---------- input ----------
+  const keys = {};
+  let atkHeld = false;
+  let joy = null;
+  addEventListener("keydown", (ev) => {
+    const k = ev.key.toLowerCase();
+    if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(k)) ev.preventDefault();
+    if (ev.repeat && k !== "j") return;
+    keys[k] = true;
+    if (k === "k") skill();
+    if (k === "h") potion();
+    if (k === " ") setAuto(!auto);
+  });
+  addEventListener("keyup", (ev) => { keys[ev.key.toLowerCase()] = false; });
+  addEventListener("blur", () => { for (const k in keys) keys[k] = false; atkHeld = false; });
+
+  let zoom = 1, camX = 0, camY = 0, dpr = 1;
+  function toWorld(cx, cy) {
+    const r = cv.getBoundingClientRect();
+    return { x: camX + (cx - r.left) / zoom, y: camY + (cy - r.top) / zoom };
+  }
+
+  cv.addEventListener("pointerdown", (ev) => {
+    ev.preventDefault();
+    if (ev.pointerType !== "mouse" && ev.clientX < innerWidth * 0.55) {
+      joy = { id: ev.pointerId, ox: ev.clientX, oy: ev.clientY, dx: 0, dy: 0 };
+      const st = $("stick"); st.hidden = false;
+      const r = $("game").getBoundingClientRect();
+      st.style.left = ev.clientX - r.left + "px"; st.style.top = ev.clientY - r.top + "px";
+      $("knob").style.transform = "";
+      cv.setPointerCapture(ev.pointerId);
+      return;
+    }
+    if (P.dead) return;
+    const w = toWorld(ev.clientX, ev.clientY);
+    let hit = null;
+    for (const e of enemies) if (!e.dead && Math.hypot(e.x - w.x, e.y - 12 * e.T.size - w.y) < e.T.r + 22) hit = e;
+    if (hit) { P.target = hit; P.moveTo = null; }
+    else { P.target = null; P.moveTo = { x: clamp(w.x, 10, W - 10), y: clamp(w.y, 10, H - 10) }; clickMark = { ...P.moveTo, t: 0 }; }
+  });
+  cv.addEventListener("pointermove", (ev) => {
+    if (!joy || ev.pointerId !== joy.id) return;
+    let dx = ev.clientX - joy.ox, dy = ev.clientY - joy.oy;
+    const m = Math.hypot(dx, dy);
+    if (m > 50) { dx *= 50 / m; dy *= 50 / m; }
+    joy.dx = dx / 50; joy.dy = dy / 50;
+    $("knob").style.transform = `translate(${dx}px, ${dy}px)`;
+  });
+  const endJoy = (ev) => { if (joy && ev.pointerId === joy.id) { joy = null; $("stick").hidden = true; } };
+  cv.addEventListener("pointerup", endJoy);
+  cv.addEventListener("pointercancel", endJoy);
+  cv.addEventListener("contextmenu", (ev) => ev.preventDefault());
+
+  function btn(id, down, up) {
+    const el = $(id);
+    el.addEventListener("pointerdown", (ev) => { ev.preventDefault(); ev.stopPropagation(); down(); });
+    if (up) { el.addEventListener("pointerup", up); el.addEventListener("pointerleave", up); el.addEventListener("pointercancel", up); }
+    el.addEventListener("keydown", (ev) => { if (ev.key === "Enter") { ev.preventDefault(); down(); if (up) setTimeout(up, 150); } });
+  }
+  btn("bAtk", () => { atkHeld = true; attack(); }, () => { atkHeld = false; });
+  btn("bSkill", skill);
+  btn("bPot", potion);
+  btn("bAuto", () => setAuto(!auto));
+
+  let resetArmed = 0;
+  $("reset").addEventListener("click", () => {
+    if (!resetArmed) {
+      resetArmed = setTimeout(() => { resetArmed = 0; $("reset").classList.remove("armed"); $("reset").textContent = "Chơi lại"; }, 3000);
+      $("reset").classList.add("armed"); $("reset").textContent = "Bấm lại để xóa";
+      return;
+    }
+    clearTimeout(resetArmed); resetArmed = 0;
+    try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
+    Object.assign(S, { lv: 1, exp: 0, gold: 0, pot: 3, qi: 0, qp: 0, kills: 0 });
+    applyStats(true);
+    P.x = VILLAGE.x + 70; P.y = VILLAGE.y + 20; P.target = null; P.moveTo = null;
+    enemies = enemies.filter((e) => e.type !== "boss");
+    respawns = respawns.filter((r) => r.type !== "boss");
+    $("reset").classList.remove("armed"); $("reset").textContent = "Chơi lại";
+    toast("Bắt đầu lại từ đầu");
+  });
+
+  // ---------- update ----------
+  function collide(o, r) {
+    for (const ob of obstacles) {
+      const dx = o.x - ob.x, dy = o.y - ob.y, d = Math.hypot(dx, dy), min = ob.r + r;
+      if (d < min && d > 0.01) { o.x = ob.x + (dx / d) * min; o.y = ob.y + (dy / d) * min; }
+    }
+    o.x = clamp(o.x, 10, W - 10); o.y = clamp(o.y, 20, H - 10);
+  }
+
+  function autoBrain() {
+    if (P.hp < P.maxHp * 0.35) potion();
+    const q = quest();
+    if (!P.target || P.target.dead) {
+      const pref = (e) => q.type === "any" ? (e.type !== "boss" || S.lv >= 9) : e.type === q.type;
+      P.target = nearestEnemy(700, pref) || nearestEnemy(260, (e) => e.type !== "boss" || q.type === "boss");
+    }
+    let near = 0;
+    for (const e of enemies) if (!e.dead && dist(e, P) < 115) near++;
+    if (near >= 2 || (P.target && P.target.type === "boss" && dist(P.target, P) < 110)) skill();
+    if (!P.target && !P.moveTo) {
+      const z = q.type === "trong" ? ET.trong.zone : q.type === "boss" ? ET.boss.zone : ET.ga.zone;
+      P.moveTo = { x: R(z[0], z[1]), y: R(z[2], z[3]) };
+    }
+  }
+
+  function updatePlayer(dt) {
+    P.atkCd -= dt; P.skCd -= dt; P.potCd -= dt; P.swing -= dt; P.spin -= dt; P.combatT -= dt;
+    if (P.dead) {
+      P.deadT -= dt;
+      $("deadT").textContent = Math.max(1, Math.ceil(P.deadT));
+      if (P.deadT <= 0) {
+        P.dead = false; $("dead").hidden = true; applyStats(true);
+        P.x = VILLAGE.x + 70; P.y = VILLAGE.y + 20;
+        toast("Bạn đã hồi sinh ở làng");
+      }
+      return;
+    }
+    let ix = 0, iy = 0;
+    if (keys.a || keys.arrowleft) ix -= 1;
+    if (keys.d || keys.arrowright) ix += 1;
+    if (keys.w || keys.arrowup) iy -= 1;
+    if (keys.s || keys.arrowdown) iy += 1;
+    if (joy) { ix = joy.dx; iy = joy.dy; }
+    const manual = Math.hypot(ix, iy) > 0.15;
+    if (manual) { P.moveTo = null; if (!auto) P.target = null; }
+    else if (auto) autoBrain();
+
+    const speed = 155;
+    let mx = 0, my = 0;
+    if (manual) {
+      const m = Math.max(1, Math.hypot(ix, iy)); mx = ix / m; my = iy / m;
+    } else if (P.target && !P.target.dead) {
+      const d = dist(P.target, P);
+      if (d > 50 + P.target.T.r) { mx = (P.target.x - P.x) / d; my = (P.target.y - P.y) / d; }
+      else attack();
+    } else if (P.moveTo) {
+      const dx = P.moveTo.x - P.x, dy = P.moveTo.y - P.y, d = Math.hypot(dx, dy);
+      if (d < 6) P.moveTo = null; else { mx = dx / d; my = dy / d; }
+    }
+    P.moving = mx !== 0 || my !== 0;
+    if (P.moving) {
+      P.x += mx * speed * dt; P.y += my * speed * dt;
+      P.aim = Math.atan2(my, mx);
+      if (Math.abs(mx) > 0.1) P.face = mx > 0 ? 1 : -1;
+      P.walk += dt * 12;
+      collide(P, 12);
+    }
+    if (keys.j || atkHeld) attack();
+
+    P.mp = Math.min(P.maxMp, P.mp + 1.6 * dt);
+    if (P.combatT <= 0) P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.03 * dt);
+    if (Math.hypot(P.x - VILLAGE.x, P.y - VILLAGE.y) < 200) P.hp = Math.min(P.maxHp, P.hp + P.maxHp * 0.08 * dt);
+  }
+
+  function updateEnemy(e, dt) {
+    const T = e.T;
+    e.hitT -= dt; e.atkCd -= dt; e.peck -= dt;
+    const d = dist(e, P);
+    let mx = 0, my = 0, sp = T.speed;
+    if (!P.dead && T.aggressive && e.state === "wander" && d < 150) e.state = "aggro";
+    if (e.state === "aggro") {
+      if (P.dead || Math.hypot(e.x - e.hx, e.y - e.hy) > 480 || Math.hypot(P.x - VILLAGE.x, P.y - VILLAGE.y) < 200) e.state = "return";
+      else {
+        if (d > T.r + 20) { mx = (P.x - e.x) / d; my = (P.y - e.y) / d; sp = T.chase; }
+        else if (e.atkCd <= 0) { e.atkCd = e.type === "boss" ? 1.4 : 1.25; e.peck = 0.2; hurtPlayer(e.atk * R(0.8, 1.2)); }
+        if (e.type === "boss") {
+          e.slamCd -= dt;
+          if (e.slamCd <= 0 && d < 220 && !e.slam) { e.slam = { x: P.x, y: P.y, t: 0.9 }; e.slamCd = 6; }
+        }
+      }
+    } else if (e.state === "return") {
+      const hd = Math.hypot(e.hx - e.x, e.hy - e.y);
+      if (hd < 8) { e.state = "wander"; e.hp = e.maxHp; }
+      else { mx = (e.hx - e.x) / hd; my = (e.hy - e.y) / hd; sp = T.chase * 1.4; e.hp = Math.min(e.maxHp, e.hp + e.maxHp * 0.3 * dt); }
+    } else {
+      e.t -= dt;
+      if (e.t <= 0) {
+        e.t = R(1, 3);
+        if (Math.random() < 0.4) { e.vx = 0; e.vy = 0; }
+        else { const a = R(0, Math.PI * 2); e.vx = Math.cos(a); e.vy = Math.sin(a); }
+      }
+      mx = e.vx; my = e.vy;
+      const z = T.zone;
+      if (e.x < z[0] || e.x > z[1]) { e.vx = e.x < z[0] ? 1 : -1; mx = e.vx; }
+      if (e.y < z[2] || e.y > z[3]) { e.vy = e.y < z[2] ? 1 : -1; my = e.vy; }
+    }
+    if (e.slam) {
+      e.slam.t -= dt;
+      if (e.slam.t <= 0) {
+        if (Math.hypot(P.x - e.slam.x, P.y - e.slam.y) < 105) hurtPlayer(e.atk * 2.2);
+        rings.push({ x: e.slam.x, y: e.slam.y, t: 0, life: 0.35, r: 110, col: "255,120,60" });
+        e.slam = null;
+      }
+    }
+    if (mx || my) {
+      e.x += mx * sp * dt; e.y += my * sp * dt;
+      if (Math.abs(mx) > 0.05) e.face = mx > 0 ? 1 : -1;
+      e.walk += dt * 14;
+      collide(e, T.r * 0.7);
+      if (e.x < 440 && e.type !== "boss") e.x = 440;
+    }
+  }
+
+  function update(dt) {
+    updatePlayer(dt);
+    for (const e of enemies) if (!e.dead) updateEnemy(e, dt);
+    enemies = enemies.filter((e) => !e.dead);
+    for (const r of respawns) r.t -= dt;
+    const ready = respawns.filter((r) => r.t <= 0);
+    respawns = respawns.filter((r) => r.t > 0);
+    for (const r of ready) if (r.type !== "boss" || S.qi >= 2) { r.type === "boss" ? spawnBoss() : spawn(r.type); }
+    for (const t of texts) t.t += dt;
+    for (const p of parts) { p.t += dt; p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 180 * dt; p.vx *= 0.97; p.rot += p.vr * dt; }
+    for (const r of rings) r.t += dt;
+    if (clickMark) { clickMark.t += dt; if (clickMark.t > 0.6) clickMark = null; }
+    for (const arr of [texts, parts, rings]) for (let i = arr.length - 1; i >= 0; i--) if (arr[i].t >= arr[i].life) arr.splice(i, 1);
+  }
+
+  // ---------- draw ----------
+  function label(x, y, text, color) {
+    ctx.font = `700 12px ${FONT}`; ctx.textAlign = "center";
+    ctx.lineWidth = 3; ctx.strokeStyle = "rgba(0,0,0,0.7)"; ctx.strokeText(text, x, y);
+    ctx.fillStyle = color; ctx.fillText(text, x, y);
+  }
+  function hpBar(x, y, w, frac, col) {
+    ctx.fillStyle = "rgba(0,0,0,0.6)"; ctx.fillRect(x - w / 2 - 1, y - 1, w + 2, 6);
+    ctx.fillStyle = col; ctx.fillRect(x - w / 2, y, w * clamp(frac, 0, 1), 4);
+  }
+
+  function drawPlayerBody(c, t, walkPhase, moving, swing, spin, face) {
+    c.save();
+    c.fillStyle = "rgba(0,0,0,0.25)"; c.beginPath(); c.ellipse(0, 2, 16, 6, 0, 0, 7); c.fill();
+    if (spin > 0) c.rotate(0); // body stays upright; the ring shows the spin
+    c.scale(face, 1);
+    const bob = moving ? Math.abs(Math.sin(walkPhase)) * -2.5 : Math.sin(t * 2) * 0.8;
+    const l = moving ? Math.sin(walkPhase) * 4 : 0;
+    c.fillStyle = "#2a2230";
+    c.fillRect(-7, -13 + bob, 6, 13 - l * 0.4 - bob); c.fillRect(2, -13 + bob, 6, 13 + l * 0.4 - bob);
+    c.fillStyle = "#4a2c16"; c.fillRect(-8 + l * 0.5, -3, 8, 4); c.fillRect(1 - l * 0.5, -3, 8, 4);
+    c.translate(0, bob);
+    // cape
+    c.fillStyle = "#6e1d1a"; c.beginPath(); c.moveTo(-9, -30); c.lineTo(-16, -8 + Math.sin(t * 5) * 2); c.lineTo(-4, -10); c.fill();
+    // body
+    c.fillStyle = "#b3342f"; c.beginPath(); c.roundRect(-10, -32, 20, 21, 5); c.fill();
+    c.fillStyle = "#3b2418"; c.fillRect(-10, -17, 20, 4);
+    c.fillStyle = "#d6a938"; c.fillRect(-2, -17, 4, 4);
+    // head
+    c.fillStyle = "#f3d2b0"; c.beginPath(); c.arc(1, -43, 13, 0, 7); c.fill();
+    c.fillStyle = "#2b2230";
+    c.beginPath(); c.moveTo(-13, -40);
+    c.lineTo(-15, -52); c.lineTo(-8, -50); c.lineTo(-6, -60); c.lineTo(1, -54); c.lineTo(6, -61); c.lineTo(9, -52); c.lineTo(16, -54); c.lineTo(13, -44);
+    c.quadraticCurveTo(8, -50, 3, -46); c.lineTo(-2, -50); c.quadraticCurveTo(-8, -44, -13, -40); c.fill();
+    c.fillStyle = "#b3342f"; c.fillRect(-12, -48, 25, 3);
+    c.fillStyle = "#1c1420"; c.fillRect(6, -43, 3, 5);
+    c.fillStyle = "#e9a88c"; c.fillRect(9, -37, 3, 2);
+    // sword
+    c.save(); c.translate(7, -23);
+    const ang = swing > 0 ? -1.9 + (1 - swing / 0.22) * 3.2 : 0.55;
+    c.rotate(ang);
+    c.fillStyle = "#4a2c16"; c.fillRect(-2, -2, 8, 4);
+    c.fillStyle = "#d6a938"; c.fillRect(5, -6, 3, 12);
+    c.fillStyle = "#e8eef5"; c.beginPath(); c.moveTo(8, -3); c.lineTo(40, -1.5); c.lineTo(44, 0); c.lineTo(40, 1.5); c.lineTo(8, 3); c.fill();
+    c.restore();
+    if (swing > 0) {
+      c.strokeStyle = `rgba(255,255,255,${swing / 0.22 * 0.8})`; c.lineWidth = 5; c.lineCap = "round";
+      c.beginPath(); c.arc(7, -23, 42, -1.6, 1.3); c.stroke();
+    }
+    c.restore();
+  }
+
+  function drawChicken(e, t) {
+    const T = e.T, s = T.size;
+    ctx.save(); ctx.translate(e.x, e.y);
+    ctx.fillStyle = "rgba(0,0,0,0.25)"; ctx.beginPath(); ctx.ellipse(0, 1, 13 * s, 5 * s, 0, 0, 7); ctx.fill();
+    ctx.scale(e.face * s, s);
+    const moving = e.state !== "wander" || e.vx || e.vy;
+    const bob = moving ? Math.abs(Math.sin(e.walk)) * -2 : 0;
+    const peck = e.peck > 0 ? 5 : 0;
+    ctx.strokeStyle = "#e3a21a"; ctx.lineWidth = 2;
+    const l = moving ? Math.sin(e.walk) * 3 : 0;
+    ctx.beginPath(); ctx.moveTo(-3, -6); ctx.lineTo(-3 + l, 0); ctx.moveTo(3, -6); ctx.lineTo(3 - l, 0); ctx.stroke();
+    ctx.translate(0, bob);
+    const hit = e.hitT > 0;
+    // tail
+    ctx.fillStyle = hit ? "#fff" : e.type === "ga" ? "#d9d0bd" : "#2d4a3a";
+    ctx.beginPath(); ctx.moveTo(-8, -14); ctx.quadraticCurveTo(-20, -30, -14, -8); ctx.fill();
+    if (e.type !== "ga") { ctx.fillStyle = hit ? "#fff" : "#1f6b5a"; ctx.beginPath(); ctx.moveTo(-9, -12); ctx.quadraticCurveTo(-24, -22, -16, -4); ctx.fill(); }
+    // body
+    ctx.fillStyle = hit ? "#ffffff" : T.col;
+    ctx.beginPath(); ctx.ellipse(0, -12, 12, 9.5, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = hit ? "#ffe0e0" : T.wing;
+    ctx.beginPath(); ctx.ellipse(-2, -11, 7, 5, -0.3, 0, 7); ctx.fill();
+    // head
+    ctx.save(); ctx.translate(peck * 0.6, peck);
+    ctx.fillStyle = hit ? "#fff" : T.col; ctx.beginPath(); ctx.arc(8, -22, 6, 0, 7); ctx.fill();
+    ctx.fillStyle = "#e0342a";
+    ctx.beginPath(); ctx.arc(6, -28, 2.6, 0, 7); ctx.arc(9, -29, 2.8, 0, 7); ctx.arc(12, -27, 2.3, 0, 7); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(12, -17, 1.8, 3, 0, 0, 7); ctx.fill();
+    ctx.fillStyle = "#f0b21a"; ctx.beginPath(); ctx.moveTo(13, -24); ctx.lineTo(18, -22); ctx.lineTo(13, -20); ctx.fill();
+    ctx.fillStyle = e.state === "aggro" ? "#b00" : "#111"; ctx.beginPath(); ctx.arc(10, -23, 1.3, 0, 7); ctx.fill();
+    if (e.type === "boss") {
+      ctx.fillStyle = "#ffd84a"; ctx.strokeStyle = "#8a5a10"; ctx.lineWidth = 0.8;
+      ctx.beginPath(); ctx.moveTo(3, -31); ctx.lineTo(3, -37); ctx.lineTo(6, -34); ctx.lineTo(8.5, -39); ctx.lineTo(11, -34); ctx.lineTo(14, -37); ctx.lineTo(14, -31); ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.restore();
+    const top = e.y - 36 * s;
+    const col = e.type === "boss" ? "#ffb14a" : e.state === "aggro" ? "#ff8a7a" : "#ffffff";
+    label(e.x, top - 6, `${T.name} Lv.${e.lv}`, col);
+    if (e.hp < e.maxHp || e.type === "boss") hpBar(e.x, top - 2, e.type === "boss" ? 90 : 34, e.hp / e.maxHp, "#e2463c");
+    if (P.target === e) {
+      ctx.strokeStyle = "rgba(255,80,60,0.9)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(e.x, e.y + 1, 18 * s, 7 * s, 0, 0, 7); ctx.stroke();
+    }
+  }
+
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    cv.width = Math.round(cv.clientWidth * dpr);
+    cv.height = Math.round(cv.clientHeight * dpr);
+    zoom = Math.min(cv.clientWidth, cv.clientHeight) < 560 ? 0.78 : 1;
+  }
+  addEventListener("resize", resize);
+
+  function draw(t) {
+    const vw = cv.clientWidth / zoom, vh = cv.clientHeight / zoom;
+    camX = vw >= W ? (W - vw) / 2 : clamp(P.x - vw / 2, 0, W - vw);
+    camY = vh >= H ? (H - vh) / 2 : clamp(P.y - vh / 2, 0, H - vh);
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.fillStyle = "#2f5a22"; ctx.fillRect(0, 0, cv.width, cv.height);
+    const k = dpr * zoom;
+    ctx.setTransform(k, 0, 0, k, -camX * k, -camY * k);
+    const sx = Math.max(0, camX), sy = Math.max(0, camY);
+    const sw = Math.min(W - sx, vw + 2), sh = Math.min(H - sy, vh + 2);
+    ctx.drawImage(ground, sx, sy, sw, sh, sx, sy, sw, sh);
+
+    if (clickMark) {
+      ctx.strokeStyle = `rgba(255,255,255,${1 - clickMark.t / 0.6})`; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(clickMark.x, clickMark.y, 6 + clickMark.t * 20, 3 + clickMark.t * 8, 0, 0, 7); ctx.stroke();
+    }
+    for (const e of enemies) if (e.slam) {
+      const f = 1 - e.slam.t / 0.9;
+      ctx.fillStyle = `rgba(255,60,40,${0.15 + f * 0.2})`; ctx.strokeStyle = "rgba(255,60,40,0.8)"; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.ellipse(e.slam.x, e.slam.y, 105, 52, 0, 0, 7); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = "rgba(255,60,40,0.35)"; ctx.beginPath(); ctx.ellipse(e.slam.x, e.slam.y, 105 * f, 52 * f, 0, 0, 7); ctx.fill();
+    }
+
+    const list = [];
+    const inView = (o, m) => o.x > camX - m && o.x < camX + vw + m && o.y > camY - m && o.y < camY + vh + m * 1.5;
+    for (const p of props) if (inView(p, 90)) list.push(p);
+    for (const e of enemies) if (inView(e, 60)) list.push(e);
+    if (!P.dead) list.push(P);
+    list.sort((a, b) => a.y - b.y);
+    for (const o of list) {
+      if (o === P) {
+        ctx.save(); ctx.translate(P.x, P.y);
+        drawPlayerBody(ctx, t, P.walk, P.moving, P.swing, P.spin, P.face);
+        ctx.restore();
+        label(P.x, P.y - 70, "Kiếm Khách", "#f2cf5b");
+        hpBar(P.x, P.y + 7, 30, P.hp / P.maxHp, "#7ed957");
+      } else if (o.kind === "tree") drawTree(o);
+      else if (o.kind === "house") drawHouse(o);
+      else if (o.kind === "sign") drawSign(o);
+      else drawChicken(o, t);
+    }
+
+    for (const r of rings) {
+      const f = r.t / r.life;
+      ctx.strokeStyle = `rgba(${r.col},${1 - f})`; ctx.lineWidth = 6 * (1 - f) + 1;
+      ctx.beginPath(); ctx.ellipse(r.x, r.y, r.r * (0.4 + f * 0.6), r.r * 0.5 * (0.4 + f * 0.6), 0, 0, 7); ctx.stroke();
+    }
+    for (const p of parts) {
+      ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
+      ctx.globalAlpha = 1 - p.t / p.life; ctx.fillStyle = p.col;
+      ctx.beginPath(); ctx.ellipse(0, 0, 4, 1.8, 0, 0, 7); ctx.fill();
+      ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "center";
+    for (const tx of texts) {
+      const f = tx.t / tx.life;
+      const pop = f < 0.15 ? 1 + (0.15 - f) * 4 : 1;
+      ctx.globalAlpha = f > 0.6 ? 1 - (f - 0.6) / 0.4 : 1;
+      ctx.font = `800 ${Math.round(tx.size * pop)}px ${FONT}`;
+      const y = tx.y - f * 34;
+      ctx.lineWidth = 4; ctx.strokeStyle = "rgba(0,0,0,0.75)"; ctx.strokeText(tx.text, tx.x, y);
+      ctx.fillStyle = tx.color; ctx.fillText(tx.text, tx.x, y);
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  // ---------- minimap & HUD ----------
+  const mini = $("mini"), mctx = mini.getContext("2d");
+  const miniBase = document.createElement("canvas");
+  miniBase.width = mini.width; miniBase.height = mini.height;
+  (function () {
+    const m = miniBase.getContext("2d");
+    m.drawImage(ground, 0, 0, W, H, 0, 0, miniBase.width, miniBase.height);
+    const kx = miniBase.width / W, ky = miniBase.height / H;
+    for (const p of props) {
+      m.fillStyle = p.kind === "house" ? "#e8d6b0" : p.pink ? "#e58ab0" : p.dark ? "#1f4d33" : "#2f6b26";
+      m.beginPath(); m.arc(p.x * kx, p.y * ky, p.kind === "house" ? 3 : 2, 0, 7); m.fill();
+    }
+  })();
+  function drawMini() {
+    const kx = mini.width / W, ky = mini.height / H;
+    mctx.drawImage(miniBase, 0, 0);
+    for (const e of enemies) {
+      mctx.fillStyle = e.type === "boss" ? "#c44dff" : e.type === "trong" ? "#ff7a2e" : "#ffffff";
+      mctx.beginPath(); mctx.arc(e.x * kx, e.y * ky, e.type === "boss" ? 4 : 1.8, 0, 7); mctx.fill();
+    }
+    mctx.strokeStyle = "rgba(255,255,255,0.8)"; mctx.lineWidth = 1;
+    mctx.strokeRect(camX * kx, camY * ky, (cv.clientWidth / zoom) * kx, (cv.clientHeight / zoom) * ky);
+    mctx.fillStyle = "#f2cf5b"; mctx.strokeStyle = "#000"; mctx.lineWidth = 1.5;
+    mctx.beginPath(); mctx.arc(P.x * kx, P.y * ky, 3.5, 0, 7); mctx.fill(); mctx.stroke();
+  }
+
+  function zoneName() {
+    if (Math.hypot(P.x - VILLAGE.x, P.y - VILLAGE.y) < 230) return "Làng Khởi Đầu";
+    if (P.x > 1950 && P.y < 450) return "Tổ Vua Gà";
+    if (P.x > 1650) return "Rừng Sương Ngọc Bích";
+    return "Đồng Cỏ Gà Rừng";
+  }
+
+  let lastHud = "";
+  function hud() {
+    const need = expNeed(S.lv);
+    $("hpBar").style.width = (P.hp / P.maxHp) * 100 + "%";
+    $("mpBar").style.width = (P.mp / P.maxMp) * 100 + "%";
+    $("expBar").style.width = (S.exp / need) * 100 + "%";
+    $("skCd").style.setProperty("--cd", Math.max(0, P.skCd / 4));
+    $("potCd").style.setProperty("--cd", Math.max(0, P.potCd / 1));
+    const q = quest();
+    const key = [Math.ceil(P.hp), Math.floor(P.mp), S.lv, S.gold, S.kills, S.pot, S.qi, S.qp, Math.round(P.x / 10), Math.round(P.y / 10)].join();
+    if (key === lastHud) return;
+    lastHud = key;
+    $("hpTxt").textContent = `${Math.ceil(P.hp)} / ${P.maxHp}`;
+    $("mpTxt").textContent = `${Math.floor(P.mp)} / ${P.maxMp}`;
+    $("lv").textContent = `Lv.${S.lv}`;
+    $("gold").textContent = S.gold;
+    $("kills").textContent = S.kills;
+    $("potN").textContent = S.pot;
+    $("qTitle").textContent = q.title;
+    $("qText").textContent = q.text;
+    $("qProg").textContent = `${S.qp}/${q.need}`;
+    $("qProg").classList.toggle("done", S.qp >= q.need);
+    $("coord").textContent = `${Math.round(P.x / 10)}, ${Math.round(P.y / 10)}`;
+    $("zone").textContent = zoneName();
+  }
+
+  function drawAvatar() {
+    const a = $("avatar").getContext("2d");
+    a.setTransform(2.1, 0, 0, 2.1, 54, 128);
+    drawPlayerBody(a, 0, 0, false, 0, 0, 1);
+  }
+
+  // ---------- boot ----------
+  load();
+  applyStats(true);
+  resize();
+  for (const [type, n] of Object.entries(COUNT)) for (let i = 0; i < n; i++) spawn(type);
+  if (S.qi >= 2) spawn("boss");
+  drawAvatar();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(drawAvatar);
+  toast(S.kills ? "Chào mừng trở lại, Kiếm Khách!" : "Chào mừng đến Đồng Cỏ Gà Rừng!", true);
+  setTimeout(() => toast(`Nhiệm vụ: ${quest().title}`), 900);
+  setInterval(save, 5000);
+
+  let last = performance.now();
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    update(dt);
+    draw(now / 1000);
+    drawMini();
+    hud();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
