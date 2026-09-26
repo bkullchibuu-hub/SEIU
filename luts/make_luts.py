@@ -31,14 +31,15 @@ def apple_log_decode(p):
 
 
 def aces_fit(x):
-    return np.clip((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0, 1)
+    """Soft filmic shoulder (extended Reinhard, white = 6) - gentle contrast for a Korean look."""
+    return np.clip(x * (1 + x / 36.0) / (1 + x), 0, 1)
 
 
-# exposure so 18% grey lands at ~0.42 on a Rec.709 display
+# exposure so 18% grey lands at ~0.46 on a Rec.709 display
 _lo, _hi = 0.01, 5.0
 for _ in range(60):
     _mid = (_lo + _hi) / 2
-    if aces_fit(0.18 * _mid) ** (1 / 2.4) < 0.42:
+    if aces_fit(0.18 * _mid) ** (1 / 2.4) < 0.46:
         _lo = _mid
     else:
         _hi = _mid
@@ -119,40 +120,40 @@ def grade(rgb, *, wb=(1, 1, 1), tone, shadow_tint=(0, 0, 0), high_tint=(0, 0, 0)
 # ---------------------------------------------------------------- the looks
 LOOKS = {
     "HanQuoc_Film": dict(
-        desc="Phim Hàn ban ngày: mềm, đen nhấc nhẹ, bóng tối xanh ngọc, da sáng ấm",
-        wb=(0.99, 1.0, 1.01),
-        tone=[(0, 0.055), (0.1, 0.13), (0.25, 0.275), (0.5, 0.525), (0.75, 0.765), (0.9, 0.875), (1, 0.945)],
-        shadow_tint=(-0.025, 0.008, 0.03), high_tint=(0.018, 0.008, -0.012),
-        sat=0.86, skin_sat=0.93, skin_lift=0.02,
-        hue_moves=[(110, 60, 22), (215, 35, -12)],
-        sat_moves=[(110, 60, 0.8)],
+        desc="Phim Hàn ban ngày: sáng, mềm, đen nhấc, lá cây xanh ngọc, da trắng hồng",
+        wb=(0.98, 1.0, 1.02),
+        tone=[(0, 0.075), (0.1, 0.155), (0.25, 0.305), (0.5, 0.585), (0.75, 0.805), (0.9, 0.9), (1, 0.955)],
+        shadow_tint=(-0.045, 0.012, 0.04), high_tint=(0.022, 0.014, -0.008),
+        sat=0.76, skin_sat=0.92, skin_lift=0.045,
+        hue_moves=[(105, 55, 38), (215, 35, -16), (22, 18, -4)],
+        sat_moves=[(110, 60, 0.62), (55, 20, 0.8), (210, 40, 0.85)],
     ),
     "HanQuoc_Dem": dict(
-        desc="Phim Hàn ban đêm: xanh đêm lạnh, đen xanh navy, da giữ tự nhiên",
-        wb=(0.94, 0.99, 1.06),
-        tone=[(0, 0.045), (0.1, 0.11), (0.3, 0.29), (0.5, 0.48), (0.8, 0.77), (1, 0.93)],
-        shadow_tint=(-0.02, 0.012, 0.055), high_tint=(-0.005, 0.01, 0.02),
-        sat=0.8, skin_sat=1.1, skin_lift=0.02,
-        hue_moves=[(110, 60, 30), (220, 40, -15)],
-        sat_moves=[(110, 60, 0.7), (0, 25, 0.9)],
+        desc="Phim Hàn ban đêm: xanh đêm điện ảnh, đen navy, da vẫn sáng ấm",
+        wb=(0.9, 0.98, 1.1),
+        tone=[(0, 0.06), (0.1, 0.12), (0.3, 0.3), (0.5, 0.5), (0.8, 0.78), (1, 0.93)],
+        shadow_tint=(-0.035, 0.02, 0.075), high_tint=(-0.01, 0.012, 0.028),
+        sat=0.7, skin_sat=1.12, skin_lift=0.035,
+        hue_moves=[(105, 55, 45), (220, 40, -18)],
+        sat_moves=[(110, 60, 0.6), (0, 25, 0.85), (200, 40, 1.15)],
     ),
     "OLongMoc_TraSua": dict(
-        desc="Ô Long Mộc: ấm, nâu kem trà sữa, vàng mật, không gian quán ấm cúng",
-        wb=(1.045, 1.0, 0.925),
-        tone=[(0, 0.05), (0.12, 0.14), (0.3, 0.31), (0.5, 0.52), (0.75, 0.77), (0.9, 0.9), (1, 0.955)],
-        shadow_tint=(0.022, 0.008, -0.02), high_tint=(0.015, 0.01, -0.015),
-        sat=0.95, skin_sat=1.0, skin_lift=0.015,
-        hue_moves=[(45, 25, -6), (110, 60, -10)],
-        sat_moves=[(30, 25, 1.14), (110, 60, 0.75), (220, 40, 0.8)],
+        desc="Ô Long Mộc: ấm nâu kem, vàng mật, đen nâu mềm, quán ấm cúng",
+        wb=(1.075, 1.0, 0.875),
+        tone=[(0, 0.07), (0.12, 0.16), (0.3, 0.33), (0.5, 0.55), (0.75, 0.785), (0.9, 0.9), (1, 0.955)],
+        shadow_tint=(0.045, 0.02, -0.025), high_tint=(0.02, 0.012, -0.02),
+        sat=0.9, skin_sat=1.0, skin_lift=0.02,
+        hue_moves=[(48, 25, -8), (105, 55, -14)],
+        sat_moves=[(30, 25, 1.22), (110, 60, 0.6), (220, 45, 0.62)],
     ),
     "SEIU_TuoiSang": dict(
-        desc="SEIU: sáng, sạch, trong trẻo kiểu Hàn, đỏ thương hiệu SEIU rực và chuẩn",
-        wb=(0.995, 1.0, 1.01),
-        tone=[(0, 0.025), (0.1, 0.13), (0.3, 0.35), (0.5, 0.57), (0.75, 0.8), (0.9, 0.92), (1, 0.975)],
-        shadow_tint=(-0.01, 0.0, 0.015), high_tint=(0.0, 0.003, 0.01),
-        sat=0.97, skin_sat=0.97, skin_lift=0.025,
-        hue_moves=[(110, 60, 12)],
-        sat_moves=[(357, 14, 1.12), (110, 60, 0.85)],
+        desc="SEIU: sáng trong kiểu Hàn, trắng sạch hơi lạnh, da hồng sáng, đỏ SEIU rực",
+        wb=(0.985, 1.0, 1.02),
+        tone=[(0, 0.035), (0.1, 0.14), (0.25, 0.33), (0.5, 0.615), (0.75, 0.84), (0.9, 0.935), (1, 0.98)],
+        shadow_tint=(-0.015, 0.0, 0.02), high_tint=(-0.004, 0.004, 0.014),
+        sat=0.9, skin_sat=0.95, skin_lift=0.05,
+        hue_moves=[(105, 55, 20), (22, 18, -5)],
+        sat_moves=[(357, 14, 1.25), (110, 60, 0.75)],
     ),
 }
 
