@@ -126,8 +126,10 @@ def shoulder(x):
 def _render(lin709, k):
     """Per-channel filmic shoulder: smoothest through a 33-point LUT, and bright
     colours drift towards white the way film does."""
-    lin = np.clip(lin709, 0, None) * k
-    return to_disp(np.clip(shoulder(lin), 0, 1))
+    lin = np.clip(shoulder(np.clip(lin709, 0, None) * k), 0, 1)
+    # display encode with a short linear toe: a pure power curve is so steep near
+    # zero that lattice interpolation lifts and tints the blacks
+    return np.where(lin < 0.0031308, 12.92 * lin, 1.055 * lin ** (1 / 2.4) - 0.055)
 
 
 _lo, _hi = 0.05, 20.0
@@ -141,7 +143,9 @@ EXPOSURE = _mid
 
 
 def apple_log_to_709(rgb):
-    return _render(apple_log_decode(rgb) @ M2020_TO_709.T, EXPOSURE)
+    # clamp sub-black noise before the gamut matrix, otherwise its negative
+    # values get amplified and tint the blacks
+    return _render(np.clip(apple_log_decode(rgb), 0, None) @ M2020_TO_709.T, EXPOSURE)
 
 
 # ---------------------------------------------------------------- look engine
@@ -186,7 +190,7 @@ LOOKS = {
         tone=[(0, 0.10), (0.2, 0.27), (0.4, 0.45), (0.536, 0.585), (0.7, 0.74), (0.85, 0.86), (1, 0.955)],
         shadow_ab=(-0.012, -0.012), high_ab=(0.004, 0.012),
         chroma=0.8, skin_chroma=0.95, skin_L=0.03, skin_hue=-3,
-        bands=[(137, 42, 34, 0.62, 0.02), (96, 24, 8, 0.8, 0.0), (258, 36, -20, 0.85, 0.02), (27, 16, 0, 0.9, 0.0)],
+        bands=[(137, 55, 28, 0.62, 0.02), (96, 24, 6, 0.8, 0.0), (258, 45, -18, 0.85, 0.02), (27, 16, 0, 0.9, 0.0)],
         hl_desat=0.3, sh_desat=0.2,
     ),
     "HanQuoc_Dem": dict(
@@ -194,8 +198,8 @@ LOOKS = {
         wb=(0.92, 0.98, 1.1),
         tone=[(0, 0.09), (0.2, 0.23), (0.4, 0.39), (0.536, 0.51), (0.7, 0.68), (0.85, 0.82), (1, 0.93)],
         shadow_ab=(-0.018, -0.035), high_ab=(-0.004, -0.012),
-        chroma=0.72, skin_chroma=1.1, skin_L=0.03, skin_hue=0,
-        bands=[(137, 42, 45, 0.55, 0.0), (258, 40, -25, 1.15, 0.0), (27, 20, 0, 0.85, 0.0)],
+        chroma=0.72, skin_chroma=1.4, skin_L=0.03, skin_hue=0,
+        bands=[(137, 55, 28, 0.55, 0.0), (258, 50, -18, 1.1, 0.0), (27, 20, 0, 0.85, 0.0)],
         hl_desat=0.25, sh_desat=0.1,
     ),
     "OLongMoc_TraSua": dict(
@@ -212,7 +216,7 @@ LOOKS = {
         wb=(0.985, 1.0, 1.02),
         tone=[(0, 0.05), (0.2, 0.26), (0.4, 0.47), (0.536, 0.61), (0.7, 0.77), (0.85, 0.885), (1, 0.975)],
         shadow_ab=(-0.006, -0.01), high_ab=(-0.002, -0.006),
-        chroma=0.92, skin_chroma=0.95, skin_L=0.045, skin_hue=-3,
+        chroma=0.92, skin_chroma=1.12, skin_L=0.045, skin_hue=-3,
         bands=[(27, 15, 0, 1.2, 0.0), (137, 42, 18, 0.75, 0.02), (258, 36, -10, 1.0, 0.03)],
         hl_desat=0.35, sh_desat=0.1,
     ),
@@ -265,7 +269,13 @@ def main():
 
 
 def check():
-    """Grey ramp must stay monotonic and smooth through every LUT."""
+    """Hue bands must not fold hues over; the grey ramp must stay monotonic
+    and smooth through every LUT; neutral Apple Log black must stay black."""
+    for name, look in LOOKS.items():
+        for hc, width, dh, cm, dl in look["bands"]:
+            assert abs(dh) * np.pi / (2 * width) < 0.85, f"{name}: hue band at {hc} folds hues"
+    black = apply_cube(read_cube(os.path.join(OUT, "AppleLog_to_Rec709.cube")), apple_log_encode(np.zeros((1, 1, 3))))
+    assert black.max() < 0.02 and np.ptp(black) < 0.004, f"Apple Log black lifted or tinted: {black}"
     ramp = np.linspace(0, 1, 256)[:, None].repeat(3, 1)
     log_ramp = apple_log_encode(np.geomspace(0.0005, 12, 256))[:, None].repeat(3, 1)
     for fn in sorted(os.listdir(OUT)):
@@ -274,7 +284,7 @@ def check():
         out = apply_cube(read_cube(os.path.join(OUT, fn)), log_ramp if "AppleLog" in fn else ramp)
         y = out @ np.array([0.2126, 0.7152, 0.0722])
         d = np.diff(y)
-        assert d.min() > -1e-4, f"{fn}: grey ramp not monotonic"
+        assert d.min() > -0.002, f"{fn}: grey ramp not monotonic"  # tolerance: half an 8-bit step
         assert np.abs(np.diff(d)).max() < 0.02, f"{fn}: grey ramp has a kink"
 
 
