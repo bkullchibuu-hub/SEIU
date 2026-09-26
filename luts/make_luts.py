@@ -118,24 +118,24 @@ def apple_log_encode(lin):
                     np.where(lin > R0, C * (lin - R0) ** 2, 0.0))
 
 
-def shoulder(x):
-    """Soft filmic shoulder (extended Reinhard, white = 8)."""
-    return x * (1 + x / 64.0) / (1 + x)
+def filmic(x):
+    """ACES-style filmic curve (Narkowicz fit): a camera-like toe that keeps
+    blacks black and a shoulder that reaches white at the iPhone's clip point,
+    so clipped walls and skies render white instead of milky grey."""
+    return np.clip((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0, 1)
 
 
 def _render(lin709, k):
-    """Per-channel filmic shoulder: smoothest through a 33-point LUT, and bright
-    colours drift towards white the way film does."""
-    lin = np.clip(shoulder(np.clip(lin709, 0, None) * k), 0, 1)
+    lin = filmic(np.clip(lin709, 0, None) * k)
     # display encode with a short linear toe: a pure power curve is so steep near
     # zero that lattice interpolation lifts and tints the blacks
     return np.where(lin < 0.0031308, 12.92 * lin, 1.055 * lin ** (1 / 2.4) - 0.055)
 
 
 _lo, _hi = 0.05, 20.0
-for _ in range(60):  # exposure so 18% grey lands at 0.46
+for _ in range(60):  # exposure so 18% grey lands at 0.42, like a normal camera
     _mid = (_lo + _hi) / 2
-    if _render(np.full((1, 3), 0.18), _mid)[0, 0] < 0.46:
+    if _render(np.full((1, 3), 0.18), _mid)[0, 0] < 0.42:
         _lo = _mid
     else:
         _hi = _mid
@@ -187,7 +187,7 @@ LOOKS = {
     "HanQuoc_Film": dict(
         desc="Phim Hàn ban ngày: sáng mềm, đen nhấc, lá cây xanh ngọc, da trắng hồng",
         wb=(0.985, 1.0, 1.02),
-        tone=[(0, 0.10), (0.2, 0.27), (0.4, 0.45), (0.536, 0.585), (0.7, 0.74), (0.85, 0.86), (1, 0.955)],
+        tone=[(0, 0.045), (0.2, 0.215), (0.4, 0.415), (0.536, 0.56), (0.7, 0.72), (0.85, 0.855), (1, 0.965)],
         shadow_ab=(-0.012, -0.012), high_ab=(0.004, 0.012),
         chroma=0.8, skin_chroma=0.95, skin_L=0.03, skin_hue=-3,
         bands=[(137, 55, 28, 0.62, 0.02), (96, 24, 6, 0.8, 0.0), (258, 45, -18, 0.85, 0.02), (27, 16, 0, 0.9, 0.0)],
@@ -196,7 +196,7 @@ LOOKS = {
     "HanQuoc_Dem": dict(
         desc="Phim Hàn ban đêm: xanh đêm điện ảnh, đen navy, da vẫn sáng ấm",
         wb=(0.92, 0.98, 1.1),
-        tone=[(0, 0.09), (0.2, 0.23), (0.4, 0.39), (0.536, 0.51), (0.7, 0.68), (0.85, 0.82), (1, 0.93)],
+        tone=[(0, 0.04), (0.2, 0.19), (0.4, 0.37), (0.536, 0.49), (0.7, 0.66), (0.85, 0.81), (1, 0.93)],
         shadow_ab=(-0.018, -0.035), high_ab=(-0.004, -0.012),
         chroma=0.72, skin_chroma=1.4, skin_L=0.03, skin_hue=0,
         bands=[(137, 55, 28, 0.55, 0.0), (258, 50, -18, 1.1, 0.0), (27, 20, 0, 0.85, 0.0)],
@@ -205,7 +205,7 @@ LOOKS = {
     "OLongMoc_TraSua": dict(
         desc="Ô Long Mộc: ấm nâu kem, vàng mật, đen nâu mềm, quán ấm cúng",
         wb=(1.07, 1.0, 0.87),
-        tone=[(0, 0.09), (0.2, 0.26), (0.4, 0.44), (0.536, 0.57), (0.7, 0.725), (0.85, 0.855), (1, 0.955)],
+        tone=[(0, 0.045), (0.2, 0.21), (0.4, 0.41), (0.536, 0.55), (0.7, 0.71), (0.85, 0.85), (1, 0.965)],
         shadow_ab=(0.012, 0.018), high_ab=(0.004, 0.018),
         chroma=0.92, skin_chroma=1.0, skin_L=0.02, skin_hue=0,
         bands=[(64, 26, 0, 1.2, 0.0), (137, 42, -10, 0.55, 0.0), (258, 45, 0, 0.6, 0.0), (27, 18, 5, 1.05, 0.0)],
@@ -214,7 +214,7 @@ LOOKS = {
     "SEIU_TuoiSang": dict(
         desc="SEIU: sáng trong kiểu Hàn, trắng sạch hơi lạnh, da hồng sáng, đỏ SEIU rực",
         wb=(0.985, 1.0, 1.02),
-        tone=[(0, 0.05), (0.2, 0.26), (0.4, 0.47), (0.536, 0.61), (0.7, 0.77), (0.85, 0.885), (1, 0.975)],
+        tone=[(0, 0.03), (0.2, 0.21), (0.4, 0.43), (0.536, 0.575), (0.7, 0.745), (0.85, 0.87), (1, 0.975)],
         shadow_ab=(-0.006, -0.01), high_ab=(-0.002, -0.006),
         chroma=0.92, skin_chroma=1.12, skin_L=0.045, skin_hue=-3,
         bands=[(27, 15, 0, 1.2, 0.0), (137, 42, 18, 0.75, 0.02), (258, 36, -10, 1.0, 0.03)],
