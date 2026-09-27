@@ -1,8 +1,8 @@
 export const SEO_ARTICLE_SEED_VERSION = 'seiu-seo-v1-20260823';
 
-const driveImage = (id: string) => `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
+export const driveImage = (id: string) => `https://drive.google.com/thumbnail?id=${id}&sz=w1600`;
 
-const contactCta = `
+export const contactCta = `
   <aside class="my-8 rounded-2xl border border-red-200 bg-red-50 p-5">
     <h2>Nhận tư vấn trực tiếp tại SEIU Vị Thanh</h2>
     <p>SEIU khai giảng lớp mới mỗi tháng. Học viên có thể liên hệ để được tư vấn lịch học, lộ trình TOPIK hoặc hồ sơ du học phù hợp với mục tiêu cá nhân.</p>
@@ -12,8 +12,8 @@ const contactCta = `
     <strong>Giờ làm việc:</strong> 08:00–20:00, Thứ 2 đến Thứ 7.</p>
   </aside>`;
 
-const author = 'Thầy Lê Trí Bửu';
-const authorRole = 'Giám đốc SEIU · Cử nhân Hàn Quốc học';
+export const author = 'Thầy Lê Trí Bửu';
+export const authorRole = 'Giám đốc SEIU · Cử nhân Hàn Quốc học';
 
 export const SEO_INITIAL_ARTICLES = [
   {
