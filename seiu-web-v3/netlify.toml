@@ -1,0 +1,63 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/api/admin/login"
+  to = "/.netlify/functions/admin-login"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/exam-registrations/*"
+  to = "/.netlify/functions/exam-registrations/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/exam-registrations"
+  to = "/.netlify/functions/exam-registrations"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/exam-results/*"
+  to = "/.netlify/functions/exam-results/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/exam-results"
+  to = "/.netlify/functions/exam-results"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/leads/*"
+  to = "/.netlify/functions/leads/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/leads"
+  to = "/.netlify/functions/leads"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/content/*"
+  to = "/.netlify/functions/content/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/api/topik-audio"
+  to = "/.netlify/functions/topik-audio"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
