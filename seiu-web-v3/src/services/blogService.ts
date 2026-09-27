@@ -1,4 +1,5 @@
 import { SEO_ARTICLE_SEED_VERSION, SEO_INITIAL_ARTICLES } from '../data/seoArticles';
+import { SEO_BATCH2_ARTICLES, SEO_BATCH2_SEED_VERSION } from '../data/seoArticlesBatch2';
 import { getAdminKey } from './authService';
 
 export type BlogCategory =
@@ -128,7 +129,7 @@ export const INTERACTIVE_TEMPLATES = {
 </div>`,
 };
 
-export const INITIAL_ARTICLES: Article[] = SEO_INITIAL_ARTICLES as Article[];
+export const INITIAL_ARTICLES: Article[] = [...SEO_INITIAL_ARTICLES, ...SEO_BATCH2_ARTICLES] as Article[];
 
 const BLOG_STORAGE_KEY = 'seiu_blog_articles_v2';
 const LEGACY_ARTICLE_IDS = new Set([
@@ -149,9 +150,17 @@ const limitPinnedArticles = (articles: Article[]): Article[] => {
   });
 };
 
+/** Thêm đợt bài SEO 2 đúng một lần; bài admin đã xóa sau đó sẽ không quay lại. */
+const addBatch2Articles = (articles: Article[]): Article[] => {
+  if (articles.some((article) => article.seedVersion === SEO_BATCH2_SEED_VERSION)) return articles;
+  const existingIds = new Set(articles.map((article) => article.id));
+  const missing = (SEO_BATCH2_ARTICLES as Article[]).filter((article) => !existingIds.has(article.id));
+  return [...articles, ...missing];
+};
+
 const normalizeArticles = (articles: Article[]): Article[] => {
   if (articles.some((article) => article.seedVersion === SEO_ARTICLE_SEED_VERSION)) {
-    return limitPinnedArticles(articles);
+    return limitPinnedArticles(addBatch2Articles(articles));
   }
   const customArticles = articles.filter((article) => (
     !LEGACY_ARTICLE_IDS.has(article.id) && !CURRENT_SEED_IDS.has(article.id)
