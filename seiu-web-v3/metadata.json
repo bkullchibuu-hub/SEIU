@@ -1,0 +1,8 @@
+{
+  "name": "SEIU - Trung Tâm Hàn Ngữ & Du Học Hàn Quốc",
+  "description": "SEIU đào tạo tiếng Hàn, luyện TOPIK và đồng hành hồ sơ du học Hàn Quốc tại khu vực Vị Thanh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500">
+  <g fill="#E5252A">
+    <polygon points="250,60 410,125 250,190 90,125" />
+    <circle cx="250" cy="125" r="9" fill="#FFFFFF" />
+    <path d="M250,125 C310,125 390,140 395,190" stroke="#E5252A" stroke-width="8" stroke-linecap="round" fill="none"/>
+    <rect x="390" y="185" width="14" height="40" rx="4" fill="#E5252A" />
+    <path d="M250,180 L400,250 L400,380 L250,460 L100,380 L100,250 Z" 
+          stroke="#E5252A" 
+          stroke-width="32" 
+          stroke-linejoin="round" 
+          stroke-linecap="round" 
+          fill="none" />
+    <path d="M 155 258 L 345 258 L 345 298 L 215 298 L 345 358 L 345 400 L 155 400 L 155 360 L 285 360 L 155 300 Z" fill="#E5252A" />
+  </g>
+</svg>
