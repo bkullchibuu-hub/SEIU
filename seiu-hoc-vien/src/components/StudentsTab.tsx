@@ -5,7 +5,7 @@ import {
   type ClassRoom, type Student, type StudentStatus,
 } from '../types';
 import type { AdminTabProps } from './AdminApp';
-import { Badge, Empty, ErrorBox, Field, Modal } from './ui';
+import { Badge, ConfirmDelete, Empty, ErrorBox, Field, Modal } from './ui';
 
 const STATUS_TONE: Record<StudentStatus, 'green' | 'amber' | 'blue' | 'gray'> = {
   dang_hoc: 'green', bao_luu: 'amber', hoan_thanh: 'blue', da_nghi: 'gray',
@@ -39,15 +39,7 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
         || (qDigits.length >= 3 && s.phone.includes(qDigits))));
   }, [data.students, query, classFilter, statusFilter]);
 
-  const remove = async (s: Student) => {
-    if (!confirm(`Xóa hồ sơ học viên ${s.code} – ${s.fullName}? Thao tác này không thể hoàn tác.`)) return;
-    try {
-      await api('DELETE', `students/${s.id}`);
-      await reload();
-    } catch (err) {
-      alert((err as Error).message);
-    }
-  };
+  const [deleting, setDeleting] = useState<Student | null>(null);
 
   return (
     <section>
@@ -99,7 +91,7 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
                     <td><StudentStatusBadge status={s.status} /></td>
                     <td className="actions">
                       <button type="button" className="btn btn-sm" onClick={() => setEditing(s)}>Sửa</button>
-                      <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => remove(s)}>Xóa</button>
+                      <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setDeleting(s)}>Xóa</button>
                     </td>
                   </tr>
                 );
@@ -119,6 +111,17 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
           onOpenExisting={id => {
             const found = data.students.find(s => s.id === id);
             if (found) setEditing(found);
+          }}
+        />
+      )}
+      {deleting && (
+        <ConfirmDelete
+          title={`Xóa học viên ${deleting.code}`}
+          message={`Xóa hồ sơ học viên ${deleting.code} – ${deleting.fullName}? Thao tác này không thể hoàn tác.`}
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            await api('DELETE', `students/${deleting.id}`);
+            await reload();
           }}
         />
       )}

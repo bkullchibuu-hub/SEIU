@@ -2,22 +2,14 @@ import { useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { formatPhone, type Teacher } from '../types';
 import type { AdminTabProps } from './AdminApp';
-import { Badge, Empty, ErrorBox, Field, Modal } from './ui';
+import { Badge, ConfirmDelete, Empty, ErrorBox, Field, Modal } from './ui';
 
 export const TeachersTab = ({ data, reload }: AdminTabProps) => {
   const [editing, setEditing] = useState<Teacher | 'new' | null>(null);
 
   const classesOf = (id: string) => data.classes.filter(c => c.teacherId === id && c.status === 'dang_mo');
 
-  const remove = async (t: Teacher) => {
-    if (!confirm(`Xóa giáo viên ${t.fullName}?`)) return;
-    try {
-      await api('DELETE', `teachers/${t.id}`);
-      await reload();
-    } catch (err) {
-      alert((err as Error).message);
-    }
-  };
+  const [deleting, setDeleting] = useState<Teacher | null>(null);
 
   return (
     <section>
@@ -45,7 +37,7 @@ export const TeachersTab = ({ data, reload }: AdminTabProps) => {
                   <td>{t.active ? <Badge tone="green">Hoạt động</Badge> : <Badge tone="gray">Đã khóa</Badge>}</td>
                   <td className="actions">
                     <button type="button" className="btn btn-sm" onClick={() => setEditing(t)}>Sửa</button>
-                    <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => remove(t)}>Xóa</button>
+                    <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setDeleting(t)}>Xóa</button>
                   </td>
                 </tr>
               ))}
@@ -56,6 +48,17 @@ export const TeachersTab = ({ data, reload }: AdminTabProps) => {
 
       {editing && (
         <TeacherForm teacher={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={reload} />
+      )}
+      {deleting && (
+        <ConfirmDelete
+          title={`Xóa giáo viên`}
+          message={`Xóa giáo viên ${deleting.fullName}? Nếu chỉ muốn tạm ngừng, hãy bỏ chọn “Cho phép đăng nhập” thay vì xóa.`}
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            await api('DELETE', `teachers/${deleting.id}`);
+            await reload();
+          }}
+        />
       )}
     </section>
   );

@@ -6,7 +6,7 @@ import {
 } from '../types';
 import type { AdminTabProps } from './AdminApp';
 import { StudentForm, StudentStatusBadge } from './StudentsTab';
-import { Badge, Empty, ErrorBox, Field, Modal } from './ui';
+import { Badge, ConfirmDelete, Empty, ErrorBox, Field, Modal } from './ui';
 
 export const StudentCountBadge = ({ c }: { c: ClassRoom }) => (
   <Badge tone={c.studentCount >= c.capacity ? 'red' : 'gray'}>{c.studentCount}/{c.capacity}</Badge>
@@ -21,15 +21,7 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
   const rows = data.classes.filter(c => showEnded || c.status === 'dang_mo');
   const viewing = data.classes.find(c => c.id === viewingId);
 
-  const remove = async (c: ClassRoom) => {
-    if (!confirm(`Xóa lớp ${c.code}?`)) return;
-    try {
-      await api('DELETE', `classes/${c.id}`);
-      await reload();
-    } catch (err) {
-      alert((err as Error).message);
-    }
-  };
+  const [deleting, setDeleting] = useState<ClassRoom | null>(null);
 
   return (
     <section>
@@ -72,7 +64,7 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
                   <td className="actions">
                     <button type="button" className="btn btn-sm" onClick={() => setViewingId(c.id)}>Học viên</button>
                     <button type="button" className="btn btn-sm" onClick={() => setEditing(c)}>Sửa</button>
-                    <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => remove(c)}>Xóa</button>
+                    <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setDeleting(c)}>Xóa</button>
                   </td>
                 </tr>
               ))}
@@ -86,6 +78,17 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
       )}
       {viewing && (
         <ClassDetail klass={viewing} data={data} teacherName={teacherName(viewing.teacherId)} onClose={() => setViewingId(null)} reload={reload} />
+      )}
+      {deleting && (
+        <ConfirmDelete
+          title={`Xóa lớp ${deleting.code}`}
+          message={`Xóa lớp ${deleting.code}? Thao tác này không thể hoàn tác.`}
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            await api('DELETE', `classes/${deleting.id}`);
+            await reload();
+          }}
+        />
       )}
     </section>
   );

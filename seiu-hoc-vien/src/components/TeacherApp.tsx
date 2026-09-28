@@ -61,7 +61,9 @@ export const TeacherApp = () => {
             </h2>
             <span className="spacer" />
             <input className="search search-sm no-print" type="search" placeholder="Tìm học viên…" value={query} onChange={e => setQuery(e.target.value)} />
-            <button type="button" className="btn btn-sm no-print" onClick={() => window.print()}>In danh sách</button>
+            {!__DEMO__ && (
+              <button type="button" className="btn btn-sm no-print" onClick={() => window.print()}>In danh sách</button>
+            )}
           </div>
           <div className="detail-meta">
             {selected.schedule && <span><b>Lịch:</b> {selected.schedule}</span>}

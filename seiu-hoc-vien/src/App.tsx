@@ -4,6 +4,9 @@ import { AdminApp } from './components/AdminApp';
 import { LoginPage } from './components/LoginPage';
 import { TeacherApp } from './components/TeacherApp';
 import type { User } from './types';
+import logoUrl from './logo.svg';
+
+const DEMO = __DEMO__;
 
 export const App = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -26,11 +29,22 @@ export const App = () => {
     setUser(null);
   };
 
+  const resetDemo = async () => {
+    (await import('./demo')).resetDemo();
+    signOut();
+  };
+
   return (
     <div className="app">
+      {DEMO && (
+        <div className="demo-bar">
+          <span>Bản demo: dữ liệu mẫu, chỉ lưu trên trình duyệt của bạn.</span>
+          <button type="button" className="btn btn-sm" onClick={resetDemo}>Khôi phục dữ liệu mẫu</button>
+        </div>
+      )}
       <header className="topbar">
         <div className="brand">
-          <img src="/favicon.svg" alt="" />
+          <img src={logoUrl} alt="" />
           <span>SEIU <small>Quản lý học viên</small></span>
         </div>
         <div className="topbar-user">

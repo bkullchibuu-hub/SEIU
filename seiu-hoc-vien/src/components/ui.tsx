@@ -1,4 +1,4 @@
-import { useEffect, useId, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 
 // Các modal đang mở, để phím Esc chỉ đóng modal trên cùng.
 const openModals: string[] = [];
@@ -59,3 +59,35 @@ export const Empty = ({ children }: { children: ReactNode }) => <div className="
 
 export const ErrorBox = ({ message, children }: { message: string; children?: ReactNode }) =>
   message ? <div className="alert alert-error" role="alert">{message}{children}</div> : null;
+
+// Hộp xác nhận ngay trong trang (thay cho confirm()/alert() của trình duyệt).
+export const ConfirmDelete = ({ title, message, onConfirm, onClose }: {
+  title: string;
+  message: string;
+  onConfirm: () => Promise<void>;
+  onClose: () => void;
+}) => {
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const run = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      await onConfirm();
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal title={title} onClose={onClose}>
+      <ErrorBox message={error} />
+      <p className="confirm-text">{message}</p>
+      <div className="form-actions">
+        <button type="button" className="btn btn-ghost" onClick={onClose}>{error ? 'Đóng' : 'Hủy'}</button>
+        {!error && <button type="button" className="btn btn-danger" disabled={busy} onClick={run}>{busy ? 'Đang xóa…' : 'Xóa'}</button>}
+      </div>
+    </Modal>
+  );
+};

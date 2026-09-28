@@ -36,14 +36,14 @@ export const setUnauthorizedHandler = (handler: () => void) => {
 };
 
 export const api = async <T>(method: string, path: string, body?: unknown): Promise<T> => {
-  const response = await fetch(`/api/${path}`, {
-    method,
-    headers: {
-      'content-type': 'application/json',
-      ...(memoryToken ? { authorization: `Bearer ${memoryToken}` } : {}),
-    },
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    ...(memoryToken ? { authorization: `Bearer ${memoryToken}` } : {}),
+  };
+  const payload = body === undefined ? undefined : JSON.stringify(body);
+  const response = __DEMO__
+    ? await (await import('./demo')).demoFetch(method, path, headers, payload)
+    : await fetch(`/api/${path}`, { method, headers, body: payload });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && path !== 'login') {
