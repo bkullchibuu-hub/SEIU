@@ -1,0 +1,26 @@
+{
+  "name": "seiu-hoc-vien",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "SEIU - Phần mềm quản lý học viên",
+  "scripts": {
+    "dev": "node dev-server.mjs",
+    "build": "vite build",
+    "lint": "tsc --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^11.0.1",
+    "react": "^19.0.1",
+    "react-dom": "^19.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^5.0.4",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.3"
+  }
+}
