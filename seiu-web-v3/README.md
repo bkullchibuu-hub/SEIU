@@ -17,6 +17,8 @@ Khi cần đổi tài khoản sau này, tạo `.env` từ `.env.example` và c�
 
 ## Phần mới
 
+- Trang **Học vụ** tại `/hoc-vu`: quản lý học viên, lớp, giáo viên, sổ điểm danh và nội dung buổi học. Admin dùng tài khoản quản trị của website; giáo viên dùng tài khoản do admin tạo. Mã nguồn ở thư mục `seiu-hoc-vien/` (xem README trong đó); sau khi sửa, chạy `npm run build:web` trong thư mục đó.
+
 - Sửa lỗi đề thi thử toàn phần chỉ hiện 69 câu: khôi phục đúng câu 28 trong block nghe 27–28, ghép câu 25–26 cho cả 10 đề và loại block câu 64 bị lặp. Mỗi đề hiện có đúng một câu cho từng số từ 1 đến 70.
 - Khi thoát đề, về trang chủ, chọn đề khác hoặc nộp bài, hệ thống dừng ngay MP3 đang phát, hủy yêu cầu tạo/tải âm thanh còn chờ và vô hiệu toàn bộ hàng đợi tự phát câu tiếp theo; rời trang bằng nút quay lại của trình duyệt cũng được xử lý.
 - Giao diện làm bài trên điện thoại đã khóa hoàn toàn cuộn ngang, không còn lệch trái/phải khi vuốt dọc.

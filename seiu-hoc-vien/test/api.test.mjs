@@ -136,3 +136,16 @@ test('điểm danh: giáo viên lớp mình ghi được buổi học, lớp kh�
   const after = await call('GET', `classes/${lopA.id}/sessions`, { token: kim });
   assert.equal(after.data.students[0].inClass, false);
 });
+
+test('API chạy được dưới /hoc-vu/api và qua đường dẫn Netlify Function; admin dùng tài khoản website', async () => {
+  const siteCtx = { ...ctx, env: { AUTH_SECRET: 'x' }, verifyAdmin: (u, p) => u === 'SeiuAdmin' && p === 'web-pass' };
+  const post = (url, body) => handleApi(new Request(url, { method: 'POST', body: JSON.stringify(body) }), siteCtx);
+  const viaSubpath = await post('https://seiuhanquochoc.com/hoc-vu/api/login', { username: 'SeiuAdmin', password: 'web-pass' });
+  assert.equal(viaSubpath.status, 200);
+  const { token } = await viaSubpath.json();
+  const viaFunction = await handleApi(new Request('https://x/.netlify/functions/hoc-vu-api/me', {
+    headers: { authorization: `Bearer ${token}` },
+  }), siteCtx);
+  assert.equal((await viaFunction.json()).user.role, 'admin');
+  assert.equal((await post('https://x/hoc-vu/api/login', { username: 'SeiuAdmin', password: 'sai' })).status, 401);
+});

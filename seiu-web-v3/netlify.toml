@@ -58,6 +58,22 @@
   force = true
 
 [[redirects]]
+  from = "/hoc-vu/api/*"
+  to = "/.netlify/functions/hoc-vu-api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/hoc-vu"
+  to = "/hoc-vu/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/hoc-vu/*"
+  to = "/hoc-vu/index.html"
+  status = 200
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200

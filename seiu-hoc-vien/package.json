@@ -8,6 +8,7 @@
     "dev": "node dev-server.mjs",
     "build": "vite build",
     "build:demo": "vite build --mode demo",
+    "build:web": "node scripts/build-web.mjs",
     "lint": "tsc --noEmit",
     "test": "node --test test/*.test.mjs"
   },

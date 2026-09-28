@@ -31,7 +31,23 @@ Tài khoản admin mặc định khi chạy local: `admin` / `admin123`. Dữ li
 
 Kiểm tra code: `npm test` (test API) và `npm run lint` (kiểm tra TypeScript).
 
-## Đưa lên mạng (Netlify)
+## Đưa lên website: seiuhanquochoc.com/hoc-vu
+
+App được gắn vào source website (`seiu-web-v3`) và chạy tại **/hoc-vu**:
+
+- Giao diện: `seiu-web-v3/public/hoc-vu/`
+- API: `seiu-web-v3/netlify/functions/hoc-vu-api.mjs` (đường dẫn `/hoc-vu/api/*`), dùng mã trong `seiu-web-v3/netlify/hoc-vu/`
+- Admin đăng nhập bằng **tài khoản quản trị của website** (`SEIU_ADMIN_USER` / `SEIU_ADMIN_PASSWORD`, hoặc tài khoản đã cấu hình sẵn).
+- Dữ liệu lưu trong Netlify Blobs của website (store `seiu-hoc-vien`).
+
+Sau khi sửa app, chạy lệnh sau để cập nhật lại các file trong website, rồi deploy website như bình thường:
+
+```bash
+cd seiu-hoc-vien
+npm run build:web
+```
+
+## Đưa lên mạng thành site riêng (Netlify)
 
 1. Trên Netlify chọn **Add new site → Import from Git**, chọn repo này.
 2. Mục **Base directory** điền `seiu-hoc-vien`. Build command và thư mục publish đã có sẵn trong `netlify.toml`.

@@ -1,3 +1,4 @@
+// TỰ SINH từ seiu-hoc-vien/server/api.mjs bởi `npm run build:web`. Đừng sửa trực tiếp file này.
 // Toàn bộ API của app. Nhận Request chuẩn web, trả về Response,
 // dùng chung cho Netlify Function và server chạy local.
 import crypto from 'node:crypto';

@@ -1,2 +1,5 @@
+/hoc-vu/api/*  /.netlify/functions/hoc-vu-api/:splat  200!
+/hoc-vu  /hoc-vu/index.html  200
+/hoc-vu/*  /hoc-vu/index.html  200
 /api/openai /.netlify/functions/openai 200
 /* /index.html 200

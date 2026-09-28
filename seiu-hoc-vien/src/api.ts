@@ -43,7 +43,7 @@ export const api = async <T>(method: string, path: string, body?: unknown): Prom
   const payload = body === undefined ? undefined : JSON.stringify(body);
   const response = __DEMO__
     ? await (await import('./demo')).demoFetch(method, path, headers, payload)
-    : await fetch(`/api/${path}`, { method, headers, body: payload });
+    : await fetch(`${import.meta.env.BASE_URL}api/${path}`, { method, headers, body: payload });
   const data = await response.json().catch(() => ({}));
   if (!response.ok) {
     if (response.status === 401 && path !== 'login') {
