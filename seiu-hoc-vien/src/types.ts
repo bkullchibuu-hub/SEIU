@@ -30,6 +30,7 @@ export interface ClassRoom {
   startDate: string;
   endDate: string;
   capacity: number;
+  sessionCount: number;
   teacherId: string;
   status: ClassStatus;
   note: string;
@@ -57,6 +58,29 @@ export interface Student {
 }
 
 export type TeacherClass = ClassRoom & { students: Student[] };
+
+export type AttendanceMark = 'co_mat' | 'muon' | 'co_phep' | 'khong_phep';
+
+export interface ClassSession {
+  classId: string;
+  number: number;
+  date: string;
+  content: string;
+  homework: string;
+  note: string;
+  marks: Record<string, AttendanceMark>;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+export type AttendanceStudent = Student & { inClass: boolean };
+
+export const MARKS: { value: AttendanceMark; label: string; short: string }[] = [
+  { value: 'co_mat', label: 'Có mặt', short: '✓' },
+  { value: 'muon', label: 'Đi muộn', short: 'M' },
+  { value: 'co_phep', label: 'Vắng có phép', short: 'P' },
+  { value: 'khong_phep', label: 'Vắng không phép', short: 'V' },
+];
 
 export const LEVELS = [
   'Nhập môn',

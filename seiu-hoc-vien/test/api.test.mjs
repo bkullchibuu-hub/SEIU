@@ -105,3 +105,34 @@ test('khóa đăng nhập sau 5 lần sai', async () => {
   for (let i = 0; i < 5; i += 1) await call('POST', 'login', { body: { username: 'admin', password: 'sai' } });
   assert.equal((await call('POST', 'login', { body: { username: 'admin', password: 'admin123' } })).status, 429);
 });
+
+test('điểm danh: giáo viên lớp mình ghi được buổi học, lớp khác bị chặn', async () => {
+  const { admin, lopA, lopB } = await setup();
+  assert.equal(lopA.sessionCount, 55);
+  const hv = (await call('POST', 'students', { token: admin, body: { fullName: 'HV A', phone: '0955555555', classId: lopA.id } })).data.item;
+  const kim = await loginAs('kim', 'matkhau1');
+
+  const saved = await call('PUT', `classes/${lopA.id}/sessions/1`, {
+    token: kim,
+    body: { date: '2026-09-07', content: 'Bảng chữ cái Hangul: nguyên âm', marks: { [hv.id]: 'co_mat', hv_la: 'co_mat', [hv.id + 'x']: 'muon' } },
+  });
+  assert.equal(saved.status, 200);
+  assert.deepEqual(saved.data.session.marks, { [hv.id]: 'co_mat' });
+  assert.equal(saved.data.session.updatedBy, 'Cô Kim');
+
+  const { data } = await call('GET', `classes/${lopA.id}/sessions`, { token: kim });
+  assert.equal(data.sessions.length, 1);
+  assert.equal(data.sessions[0].content, 'Bảng chữ cái Hangul: nguyên âm');
+  assert.deepEqual(data.students.map(s => s.fullName), ['HV A']);
+
+  assert.equal((await call('PUT', `classes/${lopA.id}/sessions/56`, { token: kim, body: { date: '2026-09-07' } })).status, 400);
+  assert.equal((await call('PUT', `classes/${lopA.id}/sessions/2`, { token: kim, body: { date: '' } })).status, 400);
+  assert.equal((await call('GET', `classes/${lopB.id}/sessions`, { token: kim })).status, 403);
+  assert.equal((await call('PUT', `classes/${lopB.id}/sessions/1`, { token: kim, body: { date: '2026-09-07' } })).status, 403);
+  assert.equal((await call('GET', `classes/${lopB.id}/sessions`, { token: admin })).status, 200);
+
+  // Học viên chuyển lớp vẫn giữ trong sổ điểm danh lớp cũ.
+  await call('PUT', `students/${hv.id}`, { token: admin, body: { ...hv, classId: lopB.id } });
+  const after = await call('GET', `classes/${lopA.id}/sessions`, { token: kim });
+  assert.equal(after.data.students[0].inClass, false);
+});

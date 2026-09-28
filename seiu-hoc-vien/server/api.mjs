@@ -8,6 +8,8 @@ import {
 
 export const STUDENT_STATUSES = ['dang_hoc', 'bao_luu', 'hoan_thanh', 'da_nghi'];
 export const CLASS_STATUSES = ['dang_mo', 'da_ket_thuc'];
+export const ATTENDANCE_MARKS = ['co_mat', 'muon', 'co_phep', 'khong_phep'];
+export const DEFAULT_SESSION_COUNT = 55;
 
 class HttpError extends Error {
   constructor(status, message, extra = {}) {
@@ -159,6 +161,12 @@ const classFromBody = async (body, ctx, existing) => {
   if (!Number.isInteger(capacity) || capacity < 1 || capacity > 200) {
     throw new HttpError(400, 'Sĩ số tối đa phải là số từ 1 đến 200.');
   }
+  const sessionCount = body.sessionCount === undefined || body.sessionCount === ''
+    ? existing?.sessionCount ?? DEFAULT_SESSION_COUNT
+    : Number.parseInt(body.sessionCount, 10);
+  if (!Number.isInteger(sessionCount) || sessionCount < 1 || sessionCount > 200) {
+    throw new HttpError(400, 'Số buổi học phải là số từ 1 đến 200.');
+  }
   const startDate = requireDate(body.startDate, 'Ngày khai giảng');
   const endDate = requireDate(body.endDate, 'Ngày kết thúc');
   if (startDate && endDate && endDate < startDate) throw new HttpError(400, 'Ngày kết thúc phải sau ngày khai giảng.');
@@ -175,6 +183,7 @@ const classFromBody = async (body, ctx, existing) => {
     startDate,
     endDate,
     capacity,
+    sessionCount,
     teacherId,
     status: oneOf(body.status, CLASS_STATUSES, existing?.status ?? 'dang_mo'),
     note: text(body.note, 1000),
@@ -254,6 +263,72 @@ const studentForTeacher = s => ({
   enrolledAt: s.enrolledAt, note: s.note,
 });
 
+// ---------- Điểm danh & nội dung buổi học ----------
+// Mỗi buổi lưu ở key sessions/<classId>/<số buổi>.
+const sessionKey = (classId, number) => `sessions/${classId}/${number}`;
+
+const studentsOfClass = (students, classId) => students.filter(
+  s => s.classId === classId || (s.classHistory ?? []).some(h => h.classId === classId),
+);
+
+const sessionsRoute = async (request, ctx, user, classId, numberParam) => {
+  const { store } = ctx;
+  const klass = await getOne(store, 'classes', classId, 'lớp học');
+  if (user.role !== 'admin' && klass.teacherId !== user.id) {
+    throw new HttpError(403, 'Bạn chỉ được xem và điểm danh lớp mình phụ trách.');
+  }
+  const method = request.method;
+  const students = studentsOfClass(await listAll(store, 'students'), classId);
+
+  if (numberParam === undefined) {
+    if (method !== 'GET') throw new HttpError(405, 'Phương thức không được hỗ trợ.');
+    const sessions = await store.list(`sessions/${classId}`);
+    return json({
+      class: withCounts([klass], students)[0],
+      students: students
+        .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'))
+        .map(s => ({ ...studentForTeacher(s), inClass: s.classId === classId })),
+      sessions: sessions.sort((a, b) => a.number - b.number),
+    });
+  }
+
+  const number = Number(numberParam);
+  const maxSessions = klass.sessionCount ?? DEFAULT_SESSION_COUNT;
+  if (!Number.isInteger(number) || number < 1 || number > maxSessions) {
+    throw new HttpError(400, `Số buổi phải từ 1 đến ${maxSessions}.`);
+  }
+
+  if (method === 'DELETE') {
+    await store.delete(sessionKey(classId, number));
+    return json({ ok: true });
+  }
+  if (method !== 'PUT') throw new HttpError(405, 'Phương thức không được hỗ trợ.');
+
+  const body = await readBody(request);
+  const allowed = new Set(students.map(s => s.id));
+  const marks = {};
+  for (const [studentId, mark] of Object.entries(body.marks ?? {})) {
+    if (allowed.has(studentId) && ATTENDANCE_MARKS.includes(mark)) marks[studentId] = mark;
+  }
+  const date = requireDate(body.date, 'Ngày học');
+  if (!date) throw new HttpError(400, 'Vui lòng chọn ngày học.');
+  const existing = await store.get(sessionKey(classId, number));
+  const session = {
+    classId,
+    number,
+    date,
+    content: text(body.content, 4000),
+    homework: text(body.homework, 2000),
+    note: text(body.note, 1000),
+    marks,
+    createdAt: existing?.createdAt ?? now(),
+    updatedAt: now(),
+    updatedBy: user.fullName,
+  };
+  await store.set(sessionKey(classId, number), session);
+  return json({ session });
+};
+
 // ---------- Router ----------
 const requireAdmin = user => {
   if (user.role !== 'admin') throw new HttpError(403, 'Bạn không có quyền thực hiện thao tác này.');
@@ -276,6 +351,10 @@ const route = async (request, ctx) => {
   const user = await authenticate(request, ctx);
 
   if (resource === 'me' && method === 'GET') return json({ user });
+
+  if (resource === 'classes' && id && parts[2] === 'sessions' && parts.length <= 4) {
+    return sessionsRoute(request, ctx, user, id, parts[3]);
+  }
 
   if (resource === 'my-classes' && method === 'GET') {
     if (user.role !== 'teacher') throw new HttpError(403, 'Chỉ dành cho tài khoản giáo viên.');
@@ -338,6 +417,8 @@ const route = async (request, ctx) => {
       if (inClass.length) {
         throw new HttpError(409, `Lớp còn ${inClass.length} học viên. Hãy chuyển học viên sang lớp khác trước khi xóa.`);
       }
+      const sessions = await store.list(`sessions/${id}`);
+      await Promise.all(sessions.map(x => store.delete(sessionKey(id, x.number))));
     }
     await store.delete(`${resource}/${id}`);
     return json({ ok: true });

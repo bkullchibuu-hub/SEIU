@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '../api';
 import { formatDate, formatPhone, type TeacherClass } from '../types';
+import { AttendanceBoard } from './AttendanceBoard';
 import { StudentCountBadge } from './ClassesTab';
 import { StudentStatusBadge } from './StudentsTab';
 import { Empty, ErrorBox } from './ui';
@@ -9,13 +10,18 @@ export const TeacherApp = () => {
   const [classes, setClasses] = useState<TeacherClass[] | null>(null);
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
+  const [view, setView] = useState<'attendance' | 'list'>('attendance');
   const [error, setError] = useState('');
 
   useEffect(() => {
     api<{ classes: TeacherClass[] }>('GET', 'my-classes')
       .then(data => {
         setClasses(data.classes);
-        const firstOpen = data.classes.find(c => c.status === 'dang_mo') ?? data.classes[0];
+        // Ưu tiên lớp đang học (đã khai giảng), rồi đến lớp sắp mở.
+        const today = new Date().toISOString().slice(0, 10);
+        const firstOpen = data.classes.find(c => c.status === 'dang_mo' && (!c.startDate || c.startDate <= today))
+          ?? data.classes.find(c => c.status === 'dang_mo')
+          ?? data.classes[0];
         setSelectedId(firstOpen?.id ?? '');
       })
       .catch(err => setError((err as Error).message));
@@ -54,11 +60,21 @@ export const TeacherApp = () => {
 
       {selected && (
         <section className="panel">
+          <h2 className="panel-title">
+            Lớp {selected.code}
+            {selected.status !== 'dang_mo' && <span className="muted small"> (đã kết thúc)</span>}
+          </h2>
+          <nav className="tabs" role="tablist">
+            <button type="button" role="tab" aria-selected={view === 'attendance'} className={`tab ${view === 'attendance' ? 'tab-active' : ''}`} onClick={() => setView('attendance')}>
+              Điểm danh &amp; nội dung học
+            </button>
+            <button type="button" role="tab" aria-selected={view === 'list'} className={`tab ${view === 'list' ? 'tab-active' : ''}`} onClick={() => setView('list')}>
+              Danh sách học viên <span className="tab-count">{selected.students.length}</span>
+            </button>
+          </nav>
+          {view === 'attendance' ? <AttendanceBoard classId={selected.id} /> : (
+          <>
           <div className="toolbar">
-            <h2 className="panel-title">
-              Danh sách học viên – {selected.code}
-              {selected.status !== 'dang_mo' && <span className="muted small"> (đã kết thúc)</span>}
-            </h2>
             <span className="spacer" />
             <input className="search search-sm no-print" type="search" placeholder="Tìm học viên…" value={query} onChange={e => setQuery(e.target.value)} />
             {!__DEMO__ && (
@@ -93,6 +109,8 @@ export const TeacherApp = () => {
                 </tbody>
               </table>
             </div>
+          )}
+          </>
           )}
         </section>
       )}

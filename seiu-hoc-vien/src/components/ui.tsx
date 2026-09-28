@@ -3,11 +3,12 @@ import { useEffect, useId, useState, type ReactNode } from 'react';
 // Các modal đang mở, để phím Esc chỉ đóng modal trên cùng.
 const openModals: string[] = [];
 
-export const Modal = ({ title, onClose, children, wide = false }: {
+export const Modal = ({ title, onClose, children, wide = false, size }: {
   title: string;
   onClose: () => void;
   children: ReactNode;
   wide?: boolean;
+  size?: 'xl';
 }) => {
   const id = useId();
   useEffect(() => {
@@ -26,7 +27,7 @@ export const Modal = ({ title, onClose, children, wide = false }: {
 
   return (
     <div className="modal-backdrop" onMouseDown={e => e.target === e.currentTarget && onClose()}>
-      <div className={`modal ${wide ? 'modal-wide' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
+      <div className={`modal ${wide ? 'modal-wide' : ''} ${size === 'xl' ? 'modal-xl' : ''}`} role="dialog" aria-modal="true" aria-label={title}>
         <div className="modal-head">
           <h2>{title}</h2>
           <button type="button" className="icon-btn" onClick={onClose} aria-label="Đóng">×</button>

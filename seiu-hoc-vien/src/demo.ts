@@ -1,7 +1,7 @@
 // Chế độ demo: chạy API ngay trong trình duyệt, dữ liệu lưu ở localStorage.
 import { handleApi } from '../server/api.mjs';
 
-const DB_KEY = 'seiu-hv-demo-db';
+const DB_KEY = 'seiu-hv-demo-db-v2';
 type Db = Record<string, unknown>;
 
 let memory: Db | null = null;
@@ -78,7 +78,9 @@ function seed(): Db {
     { id: 'lop_nm', code: 'NM-K08', name: 'Nhập môn – sáng', level: 'Nhập môn', schedule: 'T2-T4-T6, 09:00–11:00', room: 'P101', capacity: 20, teacherId: 'gv_kim', startDate: '2026-10-05', endDate: '2026-11-13' },
   ];
   for (const c of classes) {
-    db[`classes/${c.id}`] = { ...c, branch: 'Cơ sở chính', status: 'dang_mo', note: '', createdAt: stamp, updatedAt: stamp };
+    db[`classes/${c.id}`] = {
+      ...c, sessionCount: 55, branch: 'Cơ sở chính', status: 'dang_mo', note: '', createdAt: stamp, updatedAt: stamp,
+    };
   }
 
   const students: [string, string, string, string, string, string?][] = [
@@ -108,5 +110,55 @@ function seed(): Db {
       createdAt: stamp, updatedAt: stamp,
     };
   });
+
+  // Sổ điểm danh mẫu: lớp SC1-K05 đã học 10 buổi (T2-T4-T6 từ 07/09), SC2-K03 đã học 6 buổi.
+  const lessons: Record<string, { teacher: string; days: string[]; topics: [string, string][]; absences: Record<number, Record<number, string>> }> = {
+    lop_sc1: {
+      teacher: 'Kim Min-ji',
+      days: ['2026-09-07', '2026-09-09', '2026-09-11', '2026-09-14', '2026-09-16', '2026-09-18', '2026-09-21', '2026-09-23', '2026-09-25', '2026-09-28'],
+      topics: [
+        ['Bảng chữ cái Hangul: 10 nguyên âm cơ bản (ㅏ ㅑ ㅓ ㅕ ㅗ ㅛ ㅜ ㅠ ㅡ ㅣ)', 'Viết mỗi nguyên âm 2 dòng'],
+        ['Hangul: 14 phụ âm cơ bản, cách ghép âm tiết', 'Luyện đọc bảng ghép âm trang 12'],
+        ['Hangul: phụ âm bật hơi và phụ âm căng', 'Nghe và chép chính tả 20 từ'],
+        ['Hangul: nguyên âm ghép, patchim (phụ âm cuối)', 'Bài tập patchim trang 18–19'],
+        ['Kiểm tra Hangul + quy tắc nối âm', ''],
+        ['Bài 1 – 소개 (Giới thiệu): 입니다/입니까, từ vựng quốc tịch, nghề nghiệp', 'Viết đoạn giới thiệu bản thân 5 câu'],
+        ['Bài 1 (tiếp): 은/는, luyện hội thoại chào hỏi', 'Học thuộc hội thoại trang 30'],
+        ['Bài 2 – 학교 (Trường học): 이/가 있어요/없어요, đồ vật trong lớp', 'Từ vựng bài 2'],
+        ['Bài 2 (tiếp): 이것/그것/저것, số Hán Hàn 1–100', 'Bài tập số đếm trang 41'],
+        ['Bài 3 – 일상생활 (Sinh hoạt hằng ngày): đuôi -아요/어요', 'Chia 15 động từ sang -아요/어요'],
+      ],
+      absences: { 2: { 3: 'co_phep' }, 4: { 1: 'muon' }, 6: { 4: 'khong_phep', 3: 'muon' }, 8: { 2: 'co_phep' }, 9: { 4: 'khong_phep' } },
+    },
+    lop_sc2: {
+      teacher: 'Nguyễn Thu Hà',
+      days: ['2026-09-15', '2026-09-17', '2026-09-19', '2026-09-22', '2026-09-24', '2026-09-26'],
+      topics: [
+        ['Bài 11 – 날씨 (Thời tiết): -겠-, từ vựng mùa', 'Viết về thời tiết hôm nay'],
+        ['Bài 11 (tiếp): -(으)ㄹ 거예요 dự đoán', ''],
+        ['Bài 12 – 전화 (Gọi điện): -(으)ㄹ게요, -아/어 주세요', 'Hội thoại gọi điện đặt lịch'],
+        ['Bài 12 (tiếp): luyện nghe hội thoại điện thoại', 'Nghe file 12-3, trả lời câu hỏi'],
+        ['Bài 13 – 선물 (Quà tặng): -(으)ㄴ/는데, -고 싶다', ''],
+        ['Ôn tập bài 11–13, kiểm tra 15 phút', 'Chuẩn bị bài 14'],
+      ],
+      absences: { 1: { 2: 'co_phep' }, 3: { 3: 'muon' }, 5: { 1: 'khong_phep' } },
+    },
+  };
+  for (const [classId, plan] of Object.entries(lessons)) {
+    const roster = Object.values(db).filter((x): x is { id: string; classId: string; status: string } =>
+      typeof x === 'object' && x !== null && (x as { classId?: string }).classId === classId && 'code' in x);
+    plan.days.forEach((date, i) => {
+      const number = i + 1;
+      const marks: Record<string, string> = {};
+      roster.forEach((st, idx) => {
+        if (st.status === 'bao_luu' && number > 3) return;
+        marks[st.id] = plan.absences[number]?.[idx] ?? 'co_mat';
+      });
+      db[`sessions/${classId}/${number}`] = {
+        classId, number, date, content: plan.topics[i][0], homework: plan.topics[i][1], note: '', marks,
+        createdAt: `${date}T13:00:00.000Z`, updatedAt: `${date}T13:00:00.000Z`, updatedBy: plan.teacher,
+      };
+    });
+  }
   return db;
 }

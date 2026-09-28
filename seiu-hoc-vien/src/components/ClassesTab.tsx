@@ -5,6 +5,7 @@ import {
   type ClassRoom, type ClassStatus, type Student,
 } from '../types';
 import type { AdminTabProps } from './AdminApp';
+import { AttendanceBoard } from './AttendanceBoard';
 import { StudentForm, StudentStatusBadge } from './StudentsTab';
 import { Badge, ConfirmDelete, Empty, ErrorBox, Field, Modal } from './ui';
 
@@ -58,7 +59,7 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
                   <td>{c.level}</td>
                   <td>{c.schedule}{c.room && <div className="muted small">Phòng {c.room}{c.branch && ` · ${c.branch}`}</div>}</td>
                   <td>{teacherName(c.teacherId) ?? <span className="muted">Chưa phân công</span>}</td>
-                  <td><StudentCountBadge c={c} /></td>
+                  <td><StudentCountBadge c={c} /><div className="muted small">{c.sessionCount ?? 55} buổi</div></td>
                   <td className="nowrap">{formatDate(c.startDate)}</td>
                   <td><Badge tone={c.status === 'dang_mo' ? 'green' : 'gray'}>{CLASS_STATUS_LABELS[c.status]}</Badge></td>
                   <td className="actions">
@@ -100,18 +101,29 @@ const ClassDetail = ({ klass, data, teacherName, onClose, reload }: AdminTabProp
   onClose: () => void;
 }) => {
   const [editing, setEditing] = useState<Student | 'new' | null>(null);
+  const [view, setView] = useState<'attendance' | 'list'>('attendance');
   const students = data.students
     .filter(s => s.classId === klass.id)
     .sort((a, b) => a.fullName.localeCompare(b.fullName, 'vi'));
 
   return (
-    <Modal title={`Lớp ${klass.code}`} onClose={onClose} wide>
+    <Modal title={`Lớp ${klass.code}`} onClose={onClose} size="xl">
       <div className="detail-meta">
         <span><b>Trình độ:</b> {klass.level}</span>
         <span><b>Giáo viên:</b> {teacherName ?? 'Chưa phân công'}</span>
         {klass.schedule && <span><b>Lịch:</b> {klass.schedule}</span>}
         <span><b>Sĩ số:</b> {klass.studentCount}/{klass.capacity}</span>
       </div>
+      <nav className="tabs" role="tablist">
+        <button type="button" role="tab" aria-selected={view === 'attendance'} className={`tab ${view === 'attendance' ? 'tab-active' : ''}`} onClick={() => setView('attendance')}>
+          Điểm danh &amp; nội dung học
+        </button>
+        <button type="button" role="tab" aria-selected={view === 'list'} className={`tab ${view === 'list' ? 'tab-active' : ''}`} onClick={() => setView('list')}>
+          Học viên <span className="tab-count">{students.length}</span>
+        </button>
+      </nav>
+      {view === 'attendance' ? <AttendanceBoard classId={klass.id} /> : (
+      <>
       <div className="toolbar">
         <span className="spacer" />
         <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>+ Thêm học viên vào lớp</button>
@@ -137,6 +149,8 @@ const ClassDetail = ({ klass, data, teacherName, onClose, reload }: AdminTabProp
           </table>
         </div>
       )}
+      </>
+      )}
       {editing && (
         <StudentForm
           student={editing === 'new' ? null : editing}
@@ -158,7 +172,7 @@ const ClassForm = ({ klass, data, onClose, onSaved }: {
 }) => {
   const [form, setForm] = useState({
     code: '', name: '', level: '', branch: '', schedule: '', room: '', startDate: '', endDate: '',
-    capacity: 15 as number | string, teacherId: '', status: 'dang_mo' as ClassStatus, note: '',
+    capacity: 15 as number | string, sessionCount: 55 as number | string, teacherId: '', status: 'dang_mo' as ClassStatus, note: '',
     ...klass,
   });
   const [error, setError] = useState('');
@@ -211,6 +225,9 @@ const ClassForm = ({ klass, data, onClose, onSaved }: {
           </Field>
           <Field label="Sĩ số tối đa" required>
             <input type="number" min={1} max={200} value={form.capacity} onChange={e => set('capacity', e.target.value)} required />
+          </Field>
+          <Field label="Số buổi học" required hint="Số cột trong sổ điểm danh">
+            <input type="number" min={1} max={200} value={form.sessionCount} onChange={e => set('sessionCount', e.target.value)} required />
           </Field>
           <Field label="Ngày khai giảng">
             <input type="date" value={form.startDate} onChange={e => set('startDate', e.target.value)} />
