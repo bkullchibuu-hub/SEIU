@@ -26,6 +26,10 @@ export interface ClassRoom {
   level: string;
   branch: string;
   schedule: string;
+  days: number[];
+  startTime: string;
+  endTime: string;
+  monitor: string;
   room: string;
   startDate: string;
   endDate: string;
@@ -46,6 +50,8 @@ export interface Student {
   phone: string;
   email: string;
   dateOfBirth: string;
+  birthYear: number | '';
+  goal: string;
   gender: '' | 'nam' | 'nu';
   address: string;
   level: string;
@@ -55,7 +61,47 @@ export interface Student {
   status: StudentStatus;
   note: string;
   createdAt: string;
+  // Chỉ admin nhận được các trường học phí.
+  tuitionFee?: number;
+  discount?: number;
+  payments?: Payment[];
+  busFee?: number;
+  topikExam?: string;
 }
+
+export interface Payment {
+  id?: string;
+  date: string;
+  amount: number;
+  note: string;
+}
+
+export interface StudentStats {
+  attended: number;
+  absent: number;
+  late: number;
+  paid: number;
+  owed: number;
+  lastPaymentDate: string;
+}
+
+export type StudentRow = Student & { stats: StudentStats };
+export type ClassRow = ClassRoom & { sessionsDone: number; lastSessionDate: string; lastContent: string };
+
+export const GOALS = ['Du học', 'TOPIK 1', 'TOPIK 2', 'Giao tiếp', 'XKLĐ', 'Kết hôn', 'EPS-TOPIK'];
+export const DAYS: { value: number; short: string; label: string }[] = [
+  { value: 1, short: 'T2', label: 'Thứ 2' },
+  { value: 2, short: 'T3', label: 'Thứ 3' },
+  { value: 3, short: 'T4', label: 'Thứ 4' },
+  { value: 4, short: 'T5', label: 'Thứ 5' },
+  { value: 5, short: 'T6', label: 'Thứ 6' },
+  { value: 6, short: 'T7', label: 'Thứ 7' },
+  { value: 7, short: 'CN', label: 'Chủ nhật' },
+];
+
+export const formatMoney = (value: number) => `${Math.round(value).toLocaleString('vi-VN')}đ`;
+export const birthLabel = (s: Pick<Student, 'dateOfBirth' | 'birthYear'>) =>
+  (s.dateOfBirth ? formatDate(s.dateOfBirth) : s.birthYear ? String(s.birthYear) : '');
 
 export type TeacherClass = ClassRoom & { students: Student[] };
 

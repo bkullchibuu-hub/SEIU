@@ -3,6 +3,7 @@ import { api } from '../api';
 import { formatDate, formatPhone, type TeacherClass } from '../types';
 import { AttendanceBoard } from './AttendanceBoard';
 import { StudentCountBadge } from './ClassesTab';
+import { Timetable } from './Timetable';
 import { StudentStatusBadge } from './StudentsTab';
 import { Empty, ErrorBox } from './ui';
 
@@ -11,6 +12,7 @@ export const TeacherApp = () => {
   const [selectedId, setSelectedId] = useState('');
   const [query, setQuery] = useState('');
   const [view, setView] = useState<'attendance' | 'list'>('attendance');
+  const [showTimetable, setShowTimetable] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -41,7 +43,13 @@ export const TeacherApp = () => {
 
   return (
     <>
-      <h1 className="page-title">Lớp của tôi</h1>
+      <div className="page-head">
+        <h1 className="page-title">Lớp của tôi</h1>
+        <button type="button" className="btn btn-sm" onClick={() => setShowTimetable(v => !v)}>
+          {showTimetable ? 'Ẩn lịch dạy' : 'Xem lịch dạy trong tuần'}
+        </button>
+      </div>
+      {showTimetable && <Timetable classes={classes.filter(c => c.status === 'dang_mo')} />}
       <div className="class-cards">
         {classes.map(c => (
           <button

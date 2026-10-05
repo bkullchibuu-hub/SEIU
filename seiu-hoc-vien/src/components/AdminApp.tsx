@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import type { ClassRoom, Student, Teacher } from '../types';
+import type { ClassRow, StudentRow, Teacher } from '../types';
 import { ClassesTab } from './ClassesTab';
+import { DashboardTab } from './DashboardTab';
 import { StudentsTab } from './StudentsTab';
 import { TeachersTab } from './TeachersTab';
+import { Timetable } from './Timetable';
 import { ErrorBox } from './ui';
 
 export interface AdminData {
-  students: Student[];
-  classes: ClassRoom[];
+  students: StudentRow[];
+  classes: ClassRow[];
   teachers: Teacher[];
 }
 
@@ -18,25 +20,22 @@ export interface AdminTabProps {
 }
 
 const TABS = [
+  { id: 'dashboard', label: 'Tổng quan' },
   { id: 'students', label: 'Học viên' },
   { id: 'classes', label: 'Lớp học' },
+  { id: 'timetable', label: 'Thời khóa biểu' },
   { id: 'teachers', label: 'Giáo viên' },
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
 export const AdminApp = () => {
-  const [tab, setTab] = useState<TabId>('students');
+  const [tab, setTab] = useState<TabId>('dashboard');
   const [data, setData] = useState<AdminData | null>(null);
   const [error, setError] = useState('');
 
   const reload = useCallback(async () => {
     try {
-      const [students, classes, teachers] = await Promise.all([
-        api<{ items: Student[] }>('GET', 'students'),
-        api<{ items: ClassRoom[] }>('GET', 'classes'),
-        api<{ items: Teacher[] }>('GET', 'teachers'),
-      ]);
-      setData({ students: students.items, classes: classes.items, teachers: teachers.items });
+      setData(await api<AdminData>('GET', 'overview'));
       setError('');
     } catch (err) {
       setError((err as Error).message);
@@ -47,7 +46,7 @@ export const AdminApp = () => {
     reload();
   }, [reload]);
 
-  const counts: Record<TabId, number | undefined> = {
+  const counts: Partial<Record<TabId, number>> = {
     students: data?.students.filter(s => s.status === 'dang_hoc').length,
     classes: data?.classes.filter(c => c.status === 'dang_mo').length,
     teachers: data?.teachers.filter(t => t.active).length,
@@ -73,10 +72,14 @@ export const AdminApp = () => {
       <ErrorBox message={error} />
       {!data ? (
         <div className="muted center-pad">Đang tải dữ liệu…</div>
+      ) : tab === 'dashboard' ? (
+        <DashboardTab data={data} goTo={setTab} />
       ) : tab === 'students' ? (
         <StudentsTab data={data} reload={reload} />
       ) : tab === 'classes' ? (
         <ClassesTab data={data} reload={reload} />
+      ) : tab === 'timetable' ? (
+        <Timetable classes={data.classes.filter(c => c.status === 'dang_mo')} teachers={data.teachers} />
       ) : (
         <TeachersTab data={data} reload={reload} />
       )}

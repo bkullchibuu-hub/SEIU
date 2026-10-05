@@ -149,3 +149,57 @@ test('API chạy được dưới /hoc-vu/api và qua đường dẫn Netlify Fu
   assert.equal((await viaFunction.json()).user.role, 'admin');
   assert.equal((await post('https://x/hoc-vu/api/login', { username: 'SeiuAdmin', password: 'sai' })).status, 401);
 });
+
+test('bảng tổng thể: tính đã đóng, còn nợ, số buổi vắng; giáo viên không thấy học phí', async () => {
+  const { admin, lopA } = await setup();
+  const hv = (await call('POST', 'students', { token: admin, body: {
+    fullName: 'HV Nợ', phone: '0966666666', classId: lopA.id, goal: 'Du học', tuitionFee: '7.000.000', discount: 500000,
+    payments: [{ date: '2026-09-01', amount: '3.000.000' }, { date: '2026-09-20', amount: 1000000, note: 'lần 2' }],
+  } })).data.item;
+  await call('PUT', `classes/${lopA.id}/sessions/1`, { token: admin, body: { date: '2026-09-07', marks: { [hv.id]: 'khong_phep' } } });
+  await call('PUT', `classes/${lopA.id}/sessions/2`, { token: admin, body: { date: '2026-09-09', marks: { [hv.id]: 'muon' } } });
+
+  const { status, data } = await call('GET', 'overview', { token: admin });
+  assert.equal(status, 200);
+  const row = data.students.find(s => s.id === hv.id);
+  assert.deepEqual(row.stats, { attended: 1, absent: 1, late: 1, paid: 4000000, owed: 2500000, lastPaymentDate: '2026-09-20' });
+  assert.equal(data.classes.find(c => c.id === lopA.id).sessionsDone, 2);
+
+  const kim = await loginAs('kim', 'matkhau1');
+  assert.equal((await call('GET', 'overview', { token: kim })).status, 403);
+  const seen = (await call('GET', 'my-classes', { token: kim })).data.classes[0].students[0];
+  assert.equal(seen.goal, 'Du học');
+  for (const key of ['tuitionFee', 'payments', 'discount', 'busFee']) assert.equal(key in seen, false);
+});
+
+test('nhập từ Excel: tạo lớp theo tên, bỏ qua trùng, giữ số báo danh', async () => {
+  const { admin } = await setup();
+  const res = await call('POST', 'import/students', { token: admin, body: { rows: [
+    { code: '370', fullName: 'LÊ TÚ HUYỀN', phone: '0354959822', birthYear: 2009, className: 'KHOÁ 28', paid: '5.200.000,00', owed: '800.000', gender: 'nu' },
+    { code: '371', fullName: 'Người Thứ Hai', phone: '', className: 'Khóa 28' },
+    { code: '370', fullName: 'Trùng mã', className: 'KHOÁ 29' },
+    { fullName: '' },
+  ] } });
+  assert.equal(res.status, 200);
+  assert.equal(res.data.created, 2);
+  assert.deepEqual(res.data.classesCreated, ['KHÓA 28']);
+  assert.equal(res.data.skipped.length, 2);
+  const { data } = await call('GET', 'overview', { token: admin });
+  const huyen = data.students.find(s => s.code === '370');
+  assert.equal(huyen.stats.paid, 5200000);
+  assert.equal(huyen.stats.owed, 800000);
+  assert.equal(huyen.birthYear, 2009);
+  // Mã hiện có đều là số nên mã tự sinh tiếp tục dạng số.
+  const next = await call('POST', 'students', { token: admin, body: { fullName: 'HV mới' } });
+  assert.equal(next.data.item.code, '372');
+});
+
+test('lớp học: chọn thứ và giờ thì tự tạo lịch học', async () => {
+  const { admin } = await setup();
+  const { data } = await call('POST', 'classes', { token: admin, body: {
+    code: 'K37', level: 'Sơ cấp 1', capacity: 20, days: [1, 3, 5], startTime: '18:00', endTime: '20:00', monitor: 'Hân',
+  } });
+  assert.equal(data.item.schedule, 'T2-T4-T6, 18:00–20:00');
+  assert.equal(data.item.monitor, 'Hân');
+  assert.equal((await call('POST', 'classes', { token: admin, body: { code: 'K38', level: 'x', capacity: 5, startTime: '20:00', endTime: '18:00' } })).status, 400);
+});

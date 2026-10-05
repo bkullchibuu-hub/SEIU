@@ -1,7 +1,7 @@
 // Chế độ demo: chạy API ngay trong trình duyệt, dữ liệu lưu ở localStorage.
 import { handleApi } from '../server/api.mjs';
 
-const DB_KEY = 'seiu-hv-demo-db-v2';
+const DB_KEY = 'seiu-hv-demo-db-v3';
 type Db = Record<string, unknown>;
 
 let memory: Db | null = null;
@@ -72,10 +72,10 @@ function seed(): Db {
   }
 
   const classes = [
-    { id: 'lop_sc1', code: 'SC1-K05', name: 'Sơ cấp 1 – tối 246', level: 'Sơ cấp 1', schedule: 'T2-T4-T6, 18:00–20:00', room: 'P201', capacity: 15, teacherId: 'gv_kim', startDate: '2026-09-07', endDate: '2026-12-04' },
-    { id: 'lop_sc2', code: 'SC2-K03', name: 'Sơ cấp 2 – tối 357', level: 'Sơ cấp 2', schedule: 'T3-T5-T7, 18:00–20:00', room: 'P202', capacity: 15, teacherId: 'gv_ha', startDate: '2026-08-18', endDate: '2026-11-14' },
-    { id: 'lop_topik', code: 'TOPIK2-K02', name: 'Luyện đề TOPIK II cuối tuần', level: 'Luyện thi TOPIK II', schedule: 'T7-CN, 08:30–11:30', room: 'P301', capacity: 12, teacherId: 'gv_park', startDate: '2026-09-12', endDate: '2026-11-08' },
-    { id: 'lop_nm', code: 'NM-K08', name: 'Nhập môn – sáng', level: 'Nhập môn', schedule: 'T2-T4-T6, 09:00–11:00', room: 'P101', capacity: 20, teacherId: 'gv_kim', startDate: '2026-10-05', endDate: '2026-11-13' },
+    { id: 'lop_sc1', code: 'SC1-K05', name: 'Sơ cấp 1 – tối 246', level: 'Sơ cấp 1', schedule: 'T2-T4-T6, 18:00–20:00', days: [1, 3, 5], startTime: '18:00', endTime: '20:00', monitor: 'Lê Hoàng Nam', room: 'P201', capacity: 15, teacherId: 'gv_kim', startDate: '2026-09-07', endDate: '2026-12-04' },
+    { id: 'lop_sc2', code: 'SC2-K03', name: 'Sơ cấp 2 – tối 357', level: 'Sơ cấp 2', schedule: 'T3-T5-T7, 18:00–20:00', days: [2, 4, 6], startTime: '18:00', endTime: '20:00', monitor: 'Bùi Thanh Trúc', room: 'P202', capacity: 15, teacherId: 'gv_ha', startDate: '2026-08-18', endDate: '2026-11-14' },
+    { id: 'lop_topik', code: 'TOPIK2-K02', name: 'Luyện đề TOPIK II cuối tuần', level: 'Luyện thi TOPIK II', schedule: 'T7-CN, 08:30–11:30', days: [6, 7], startTime: '08:30', endTime: '11:30', monitor: 'Ngô Khánh Linh', room: 'P301', capacity: 12, teacherId: 'gv_park', startDate: '2026-09-12', endDate: '2026-11-08' },
+    { id: 'lop_nm', code: 'NM-K08', name: 'Nhập môn – sáng', level: 'Nhập môn', schedule: 'T2-T4-T6, 09:00–11:00', days: [1, 3, 5], startTime: '09:00', endTime: '11:00', monitor: '', room: 'P101', capacity: 20, teacherId: 'gv_kim', startDate: '2026-10-05', endDate: '2026-11-13' },
   ];
   for (const c of classes) {
     db[`classes/${c.id}`] = {
@@ -101,11 +101,19 @@ function seed(): Db {
   ];
   const levelOf = (id: string) => classes.find(c => c.id === id)?.level ?? '';
   const startOf = (id: string) => classes.find(c => c.id === id)?.startDate ?? '';
+  const goals = ['Du học', 'Du học', 'TOPIK 1', 'Giao tiếp', 'Du học', 'XKLĐ', 'Du học', 'Kết hôn', 'TOPIK 1', 'TOPIK 2', 'TOPIK 2', 'Du học', 'Giao tiếp', 'Du học'];
+  const fees = [7000000, 7000000, 6200000, 5300000, 7000000, 9500000, 7000000, 5200000, 6200000, 8050000, 8050000, 7000000, 3000000, 7000000];
+  const paidPlan = [[3000000, 4000000], [7000000], [3000000], [5300000], [3000000], [5000000, 4500000], [7000000], [3000000], [6200000], [8050000], [4000000], [3000000], [3000000], []];
   students.forEach(([fullName, phone, dateOfBirth, gender, classId, note = ''], i) => {
     const id = `hv_demo${i + 1}`;
     db[`students/${id}`] = {
       id, code: `HV${String(i + 1).padStart(4, '0')}`, fullName, phone, email: '', dateOfBirth, gender, address: '',
       level: levelOf(classId) || 'Nhập môn', classId, enrolledAt: startOf(classId), classHistory: [],
+      birthYear: Number(dateOfBirth.slice(0, 4)), goal: goals[i], tuitionFee: fees[i], discount: 0, busFee: i === 4 ? 300000 : 0,
+      topikExam: i === 9 ? 'TOPIK 105 – đã đóng phí' : '',
+      payments: paidPlan[i].map((amount, k) => ({
+        id: `tt_demo${i}_${k}`, date: k === 0 ? startOf(classId) || '2026-09-01' : '2026-10-02', amount, note: `Lần ${k + 1}`,
+      })),
       status: i === 7 ? 'bao_luu' : 'dang_hoc', note: note || (classId ? '' : 'Chờ lớp Nhập môn khai giảng tháng 10'),
       createdAt: stamp, updatedAt: stamp,
     };

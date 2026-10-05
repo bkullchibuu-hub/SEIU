@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { api } from '../api';
 import {
-  CLASS_STATUS_LABELS, formatDate, formatPhone, LEVELS,
+  CLASS_STATUS_LABELS, DAYS, formatDate, formatPhone, LEVELS,
   type ClassRoom, type ClassStatus, type Student,
 } from '../types';
 import type { AdminTabProps } from './AdminApp';
@@ -46,7 +46,7 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
           <table>
             <thead>
               <tr>
-                <th>Mã lớp</th><th>Trình độ</th><th>Lịch học</th><th>Giáo viên</th><th>Sĩ số</th><th>Khai giảng</th><th>Trạng thái</th><th />
+                <th>Mã lớp</th><th>Trình độ</th><th>Lịch học</th><th>Giáo viên</th><th>Lớp trưởng</th><th>Sĩ số</th><th>Khai giảng</th><th>Trạng thái</th><th />
               </tr>
             </thead>
             <tbody>
@@ -59,6 +59,7 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
                   <td>{c.level}</td>
                   <td>{c.schedule}{c.room && <div className="muted small">Phòng {c.room}{c.branch && ` · ${c.branch}`}</div>}</td>
                   <td>{teacherName(c.teacherId) ?? <span className="muted">Chưa phân công</span>}</td>
+                  <td>{c.monitor}</td>
                   <td><StudentCountBadge c={c} /><div className="muted small">{c.sessionCount ?? 55} buổi</div></td>
                   <td className="nowrap">{formatDate(c.startDate)}</td>
                   <td><Badge tone={c.status === 'dang_mo' ? 'green' : 'gray'}>{CLASS_STATUS_LABELS[c.status]}</Badge></td>
@@ -171,7 +172,8 @@ const ClassForm = ({ klass, data, onClose, onSaved }: {
   onSaved: () => Promise<void>;
 }) => {
   const [form, setForm] = useState({
-    code: '', name: '', level: '', branch: '', schedule: '', room: '', startDate: '', endDate: '',
+    code: '', name: '', level: '', branch: '', schedule: '', days: [] as number[], startTime: '', endTime: '', monitor: '',
+    room: '', startDate: '', endDate: '',
     capacity: 15 as number | string, sessionCount: 55 as number | string, teacherId: '', status: 'dang_mo' as ClassStatus, note: '',
     ...klass,
   });
@@ -184,8 +186,10 @@ const ClassForm = ({ klass, data, onClose, onSaved }: {
     setBusy(true);
     setError('');
     try {
-      if (klass) await api('PUT', `classes/${klass.id}`, form);
-      else await api('POST', 'classes', form);
+      // Khi đã chọn thứ học, máy chủ tự tạo dòng lịch học từ thứ + giờ.
+      const body = { ...form, schedule: form.days.length ? '' : form.schedule };
+      if (klass) await api('PUT', `classes/${klass.id}`, body);
+      else await api('POST', 'classes', body);
       await onSaved();
       onClose();
     } catch (err) {
@@ -220,9 +224,39 @@ const ClassForm = ({ klass, data, onClose, onSaved }: {
               {teachers.map(t => <option key={t.id} value={t.id}>{t.fullName}{t.active ? '' : ' (đã khóa)'}</option>)}
             </select>
           </Field>
-          <Field label="Lịch học" hint="VD: T2-T4-T6, 18:00–20:00">
-            <input value={form.schedule} onChange={e => set('schedule', e.target.value)} />
+          <Field label="Lớp trưởng">
+            <input value={form.monitor} onChange={e => set('monitor', e.target.value)} placeholder="Tên lớp trưởng" />
           </Field>
+          <div className="field field-full">
+            <span className="field-label">Thứ học trong tuần</span>
+            <div className="day-picks" role="group" aria-label="Thứ học trong tuần">
+              {DAYS.map(d => {
+                const on = form.days.includes(d.value);
+                return (
+                  <button
+                    key={d.value}
+                    type="button"
+                    className={`day-pick ${on ? 'day-pick-on' : ''}`}
+                    aria-pressed={on}
+                    onClick={() => set('days', on ? form.days.filter(x => x !== d.value) : [...form.days, d.value].sort())}
+                  >
+                    {d.short}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <Field label="Giờ bắt đầu">
+            <input type="time" value={form.startTime} onChange={e => set('startTime', e.target.value)} />
+          </Field>
+          <Field label="Giờ kết thúc">
+            <input type="time" value={form.endTime} onChange={e => set('endTime', e.target.value)} />
+          </Field>
+          {form.days.length === 0 && (
+            <Field label="Lịch học (ghi tay)" hint="Chọn thứ và giờ ở trên để lớp hiện trên thời khóa biểu" full>
+              <input value={form.schedule} onChange={e => set('schedule', e.target.value)} />
+            </Field>
+          )}
           <Field label="Sĩ số tối đa" required>
             <input type="number" min={1} max={200} value={form.capacity} onChange={e => set('capacity', e.target.value)} required />
           </Field>

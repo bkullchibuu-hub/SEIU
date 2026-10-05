@@ -46,6 +46,22 @@ const requirePhone = (value, { optional = false } = {}) => {
   if (!/^0\d{9,10}$/.test(v)) throw new HttpError(400, 'Số điện thoại phải có 10–11 chữ số và bắt đầu bằng 0.');
   return v;
 };
+// Tiền VND: nhận số hoặc chuỗi kiểu "5.200.000,00", "-800.000", "3000000".
+export const parseMoney = value => {
+  if (typeof value === 'number') return Number.isFinite(value) ? Math.round(value) : 0;
+  let v = String(value ?? '').replace(/[\s₫đvndVND]/g, '');
+  if (!v) return 0;
+  if (/,\d{1,2}$/.test(v)) v = v.replace(/\./g, '').replace(',', '.');
+  else v = v.replace(/[.,]/g, '');
+  const n = Number(v);
+  return Number.isFinite(n) ? Math.max(-1e11, Math.min(1e11, Math.round(n))) : 0;
+};
+const money = value => Math.max(0, parseMoney(value));
+const timeOrEmpty = value => (/^([01]\d|2[0-3]):[0-5]\d$/.test(String(value ?? '')) ? String(value) : '');
+export const DAY_LABELS = { 1: 'T2', 2: 'T3', 3: 'T4', 4: 'T5', 5: 'T6', 6: 'T7', 7: 'CN' };
+const normKey = value => String(value ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd')
+  .toUpperCase().replace(/\s+/g, ' ').trim();
+
 const oneOf = (value, allowed, fallback) => (allowed.includes(value) ? value : fallback);
 
 const readBody = async request => {
@@ -175,6 +191,14 @@ const classFromBody = async (body, ctx, existing) => {
   if (!Number.isInteger(sessionCount) || sessionCount < 1 || sessionCount > 200) {
     throw new HttpError(400, 'Số buổi học phải là số từ 1 đến 200.');
   }
+  const days = [...new Set((Array.isArray(body.days) ? body.days : []).map(Number))]
+    .filter(d => d >= 1 && d <= 7).sort((a, b) => a - b);
+  const startTime = timeOrEmpty(body.startTime);
+  const endTime = timeOrEmpty(body.endTime);
+  if (startTime && endTime && endTime <= startTime) throw new HttpError(400, 'Giờ kết thúc phải sau giờ bắt đầu.');
+  const autoSchedule = days.length
+    ? `${days.map(d => DAY_LABELS[d]).join('-')}${startTime ? `, ${startTime}${endTime ? `–${endTime}` : ''}` : ''}`
+    : '';
   const startDate = requireDate(body.startDate, 'Ngày khai giảng');
   const endDate = requireDate(body.endDate, 'Ngày kết thúc');
   if (startDate && endDate && endDate < startDate) throw new HttpError(400, 'Ngày kết thúc phải sau ngày khai giảng.');
@@ -186,7 +210,11 @@ const classFromBody = async (body, ctx, existing) => {
     name: text(body.name, 120),
     level: requireText(body.level, 'trình độ', 80),
     branch: text(body.branch, 120),
-    schedule: text(body.schedule, 200),
+    schedule: text(body.schedule, 200) || autoSchedule,
+    days,
+    startTime,
+    endTime,
+    monitor: text(body.monitor, 120),
     room: text(body.room, 80),
     startDate,
     endDate,
@@ -206,15 +234,31 @@ const withCounts = (classes, students) => classes.map(c => ({
 }));
 
 // ---------- Học viên ----------
+// Mã học viên tự sinh: nếu mã hiện có đều là số (VD số báo danh 370, 371…) thì tiếp tục dạng số,
+// nếu không thì dạng HV0001.
 const nextStudentCode = students => {
-  const max = students.reduce((acc, s) => Math.max(acc, Number.parseInt(String(s.code).replace(/\D/g, ''), 10) || 0), 0);
+  const codes = students.map(x => String(x.code ?? ''));
+  const max = codes.reduce((acc, c) => Math.max(acc, Number.parseInt(c.replace(/\D/g, ''), 10) || 0), 0);
+  if (codes.length && codes.every(c => /^\d+$/.test(c))) return String(max + 1);
   return `HV${String(max + 1).padStart(4, '0')}`;
 };
 
+const paymentsFromBody = list => (Array.isArray(list) ? list : []).slice(0, 60).map(p => ({
+  id: /^[\w-]{1,60}$/.test(String(p?.id ?? '')) ? String(p.id) : newId('tt'),
+  date: requireDate(p?.date ?? '', 'Ngày đóng tiền'),
+  amount: money(p?.amount),
+  note: text(p?.note, 200),
+})).filter(p => p.amount > 0);
+
 const studentFromBody = async (body, ctx, existing) => {
   const students = await listAll(ctx.store, 'students');
-  const phone = requirePhone(body.phone);
-  const duplicate = students.find(s => s.phone === phone && s.id !== existing?.id);
+  const phone = requirePhone(body.phone, { optional: true });
+  const code = text(body.code, 20).toUpperCase() || existing?.code || nextStudentCode(students);
+  const sameCode = students.find(x => String(x.code).toUpperCase() === code && x.id !== existing?.id);
+  if (sameCode) throw new HttpError(409, `Mã học viên ${code} đã được dùng cho ${sameCode.fullName}.`);
+  const birthYear = body.birthYear === '' || body.birthYear === undefined ? '' : Number.parseInt(body.birthYear, 10);
+  if (birthYear !== '' && !(birthYear >= 1940 && birthYear <= 2030)) throw new HttpError(400, 'Năm sinh không hợp lệ.');
+  const duplicate = phone && students.find(s => s.phone === phone && s.id !== existing?.id);
   if (duplicate) {
     throw new HttpError(409, `Số điện thoại này đã có trong hồ sơ học viên ${duplicate.code} – ${duplicate.fullName}.`, {
       duplicate: { id: duplicate.id, code: duplicate.code, fullName: duplicate.fullName },
@@ -246,11 +290,18 @@ const studentFromBody = async (body, ctx, existing) => {
   return {
     ...existing,
     id: existing?.id ?? newId('hv'),
-    code: existing?.code ?? nextStudentCode(students),
+    code,
     fullName: requireText(body.fullName, 'họ tên học viên', 120),
     phone,
     email: text(body.email, 160),
     dateOfBirth: requireDate(body.dateOfBirth, 'Ngày sinh'),
+    birthYear: birthYear === '' && body.dateOfBirth ? Number(String(body.dateOfBirth).slice(0, 4)) : birthYear,
+    goal: text(body.goal, 80),
+    tuitionFee: money(body.tuitionFee),
+    discount: money(body.discount),
+    payments: paymentsFromBody(body.payments),
+    busFee: money(body.busFee),
+    topikExam: text(body.topikExam, 160),
     gender: oneOf(body.gender, ['nam', 'nu', ''], ''),
     address: text(body.address, 240),
     level: text(body.level, 80),
@@ -265,9 +316,11 @@ const studentFromBody = async (body, ctx, existing) => {
 };
 
 // Thông tin giáo viên được xem về học viên trong lớp mình.
+// Không gồm học phí / công nợ: những thông tin này chỉ admin xem được.
 const studentForTeacher = s => ({
   id: s.id, code: s.code, fullName: s.fullName, phone: s.phone, email: s.email,
-  dateOfBirth: s.dateOfBirth, gender: s.gender, level: s.level, status: s.status,
+  dateOfBirth: s.dateOfBirth, birthYear: s.birthYear ?? '', goal: s.goal ?? '',
+  gender: s.gender, level: s.level, status: s.status,
   enrolledAt: s.enrolledAt, note: s.note,
 });
 
@@ -337,6 +390,134 @@ const sessionsRoute = async (request, ctx, user, classId, numberParam) => {
   return json({ session });
 };
 
+// ---------- Bảng tổng thể (admin) ----------
+const overview = async ctx => {
+  const { store } = ctx;
+  const [students, classes, teachers] = await Promise.all([
+    listAll(store, 'students'), listAll(store, 'classes'), listAll(store, 'teachers'),
+  ]);
+  const sessionsByClass = new Map(await Promise.all(
+    classes.map(async c => [c.id, (await store.list(`sessions/${c.id}`)).sort((a, b) => a.number - b.number)]),
+  ));
+  const rows = students.map(st => {
+    const classIds = new Set([st.classId, ...(st.classHistory ?? []).map(h => h.classId)].filter(Boolean));
+    let attended = 0;
+    let absent = 0;
+    let late = 0;
+    for (const id of classIds) {
+      for (const ses of sessionsByClass.get(id) ?? []) {
+        const m = ses.marks?.[st.id];
+        if (m === 'co_mat') attended += 1;
+        else if (m === 'muon') { attended += 1; late += 1; }
+        else if (m === 'co_phep' || m === 'khong_phep') absent += 1;
+      }
+    }
+    const payments = st.payments ?? [];
+    const paid = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+    const lastPayment = payments.filter(p => p.date).sort((a, b) => b.date.localeCompare(a.date))[0];
+    return {
+      ...st,
+      stats: {
+        attended, absent, late, paid,
+        owed: (st.tuitionFee || 0) - (st.discount || 0) - paid,
+        lastPaymentDate: lastPayment?.date ?? '',
+      },
+    };
+  }).sort((a, b) => String(a.code).localeCompare(String(b.code), 'vi', { numeric: true }));
+  const classRows = withCounts(classes, students).map(c => {
+    const sessions = sessionsByClass.get(c.id) ?? [];
+    const last = sessions[sessions.length - 1];
+    return { ...c, sessionsDone: sessions.length, lastSessionDate: last?.date ?? '', lastContent: last?.content ?? '' };
+  }).sort((a, b) => a.code.localeCompare(b.code, 'vi', { numeric: true }));
+  return json({ students: rows, classes: classRows, teachers: teachers.map(publicTeacher) });
+};
+
+// Nhập học viên hàng loạt (dán từ Excel). Lớp chưa có sẽ được tạo theo tên.
+export const canonicalClassCode = name => {
+  const key = normKey(name);
+  const m = key.match(/^KHOA\s*(.+)$/);
+  return m ? `KHÓA ${m[1].trim()}` : String(name ?? '').trim().toUpperCase().slice(0, 40);
+};
+
+const importStudents = async (request, ctx) => {
+  const { store } = ctx;
+  const body = await readBody(request);
+  const rows = Array.isArray(body.rows) ? body.rows.slice(0, 2000) : [];
+  if (!rows.length) throw new HttpError(400, 'Không có dòng nào để nhập.');
+  const students = await listAll(store, 'students');
+  const classes = await listAll(store, 'classes');
+  const classByKey = new Map(classes.map(c => [normKey(c.code), c]));
+  const created = [];
+  const skipped = [];
+  const classesCreated = [];
+
+  for (const [index, row] of rows.entries()) {
+    const fullName = text(row.fullName, 120);
+    if (!fullName) { skipped.push({ row: index + 1, reason: 'Thiếu họ tên' }); continue; }
+    const phoneDigits = digits(row.phone);
+    const phone = /^0\d{9,10}$/.test(phoneDigits) ? phoneDigits : '';
+    const code = text(row.code, 20).toUpperCase();
+    if (code && students.some(x => String(x.code).toUpperCase() === code)) {
+      skipped.push({ row: index + 1, name: fullName, reason: `Mã ${code} đã có` }); continue;
+    }
+    if (phone && students.some(x => x.phone === phone)) {
+      skipped.push({ row: index + 1, name: fullName, reason: `SĐT ${phone} đã có` }); continue;
+    }
+
+    let classId = '';
+    if (text(row.className, 60)) {
+      const classCode = canonicalClassCode(row.className);
+      let klass = classByKey.get(normKey(classCode));
+      if (!klass) {
+        klass = {
+          id: newId('lop'), code: classCode, name: '', level: 'Chưa phân loại', branch: '', schedule: '', days: [],
+          startTime: '', endTime: '', monitor: '', room: '', startDate: '', endDate: '', capacity: 40,
+          sessionCount: DEFAULT_SESSION_COUNT, teacherId: '', status: 'dang_mo', note: 'Tạo khi nhập từ Excel',
+          createdAt: now(), updatedAt: now(),
+        };
+        await save(store, 'classes', klass);
+        classByKey.set(normKey(classCode), klass);
+        classesCreated.push(classCode);
+      }
+      classId = klass.id;
+    }
+
+    const paid = money(row.paid);
+    const owed = money(row.owed);
+    const birthYear = Number.parseInt(row.birthYear, 10);
+    const dob = /^\d{4}-\d{2}-\d{2}$/.test(String(row.dateOfBirth ?? '')) ? row.dateOfBirth : '';
+    const student = {
+      id: newId('hv'),
+      code: code || nextStudentCode(students),
+      fullName,
+      phone,
+      email: '',
+      dateOfBirth: dob,
+      birthYear: birthYear >= 1940 && birthYear <= 2030 ? birthYear : '',
+      gender: oneOf(row.gender, ['nam', 'nu'], ''),
+      address: text(row.address, 240),
+      goal: text(row.goal, 80),
+      level: '',
+      classId,
+      enrolledAt: '',
+      classHistory: [],
+      status: oneOf(row.status, STUDENT_STATUSES, 'dang_hoc'),
+      tuitionFee: paid + owed,
+      discount: 0,
+      payments: paid ? [{ id: newId('tt'), date: requireDate(row.paidDate ?? '', 'Ngày thu'), amount: paid, note: 'Chuyển từ Excel' }] : [],
+      busFee: money(row.busFee),
+      topikExam: text(row.topikExam, 160),
+      note: text(row.note, 1600),
+      createdAt: now(),
+      updatedAt: now(),
+    };
+    await save(store, 'students', student);
+    students.push(student);
+    created.push(student.code);
+  }
+  return json({ created: created.length, skipped, classesCreated });
+};
+
 // ---------- Router ----------
 const requireAdmin = user => {
   if (user.role !== 'admin') throw new HttpError(403, 'Bạn không có quyền thực hiện thao tác này.');
@@ -364,6 +545,15 @@ const route = async (request, ctx) => {
 
   if (resource === 'classes' && id && parts[2] === 'sessions' && parts.length <= 4) {
     return sessionsRoute(request, ctx, user, id, parts[3]);
+  }
+
+  if (resource === 'overview' && method === 'GET') {
+    requireAdmin(user);
+    return overview(ctx);
+  }
+  if (resource === 'import' && id === 'students' && method === 'POST') {
+    requireAdmin(user);
+    return importStudents(request, ctx);
   }
 
   if (resource === 'my-classes' && method === 'GET') {
