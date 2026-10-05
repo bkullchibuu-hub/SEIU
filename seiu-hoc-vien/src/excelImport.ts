@@ -13,7 +13,7 @@ export interface ImportRow {
   address: string;
   goal: string;
   className: string;
-  status: StudentStatus;
+  status: StudentStatus | '';
   paid: number;
   owed: number;
   paidDate: string;
@@ -121,8 +121,9 @@ const parseGoal = (raw: string) => {
   return GOAL_MAP.find(([re]) => re.test(key))?.[1] ?? raw.trim();
 };
 
-const parseStatus = (raw: string): StudentStatus => {
+const parseStatus = (raw: string): StudentStatus | '' => {
   const key = norm(raw);
+  if (!key) return '';
   if (/BAO LUU/.test(key)) return 'bao_luu';
   if (/NGHI/.test(key)) return 'da_nghi';
   if (/HOAN THANH|TOT NGHIEP|XONG/.test(key)) return 'hoan_thanh';
@@ -208,12 +209,18 @@ export const parseExcelPaste = (input: string) => {
     });
   });
 
-  // Trùng số báo danh ngay trong bảng dán vào.
+  // Trùng số báo danh ngay trong bảng dán vào: người sau được cấp số mới, ghi lại số cũ.
   const seen = new Map<string, string>();
   for (const r of rows) {
     if (!r.code) continue;
     if (seen.has(r.code)) {
-      warnings.push({ line: r.line, name: r.fullName, message: `Trùng số báo danh ${r.code} với ${seen.get(r.code)} – dòng này sẽ bị bỏ qua` });
+      warnings.push({
+        line: r.line,
+        name: r.fullName,
+        message: `Trùng số báo danh ${r.code} với ${seen.get(r.code)} – sẽ được cấp số mới, số cũ ghi vào ghi chú`,
+      });
+      r.note = [r.note, `Số báo danh trong Excel: ${r.code} (trùng với ${seen.get(r.code)})`].filter(Boolean).join('\n');
+      r.code = '';
     } else seen.set(r.code, r.fullName);
   }
   return { rows, warnings, headerFound: true };

@@ -292,6 +292,8 @@ th.num, td.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 
 .import-steps { margin: 0 0 12px; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
 .import-box { font-family: ui-monospace, 'SF Mono', Consolas, monospace; font-size: 12.5px; white-space: pre; }
+.import-update { margin: 10px 0; align-items: flex-start; }
+.import-update input { margin-top: 3px; }
 .import-summary { display: flex; flex-wrap: wrap; gap: 6px 20px; margin: 12px 0; font-size: 14px; }
 .import-warnings { margin-bottom: 12px; font-size: 14px; }
 .import-warnings summary { cursor: pointer; color: var(--amber); font-weight: 600; }

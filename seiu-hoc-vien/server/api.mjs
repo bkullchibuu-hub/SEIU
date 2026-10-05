@@ -439,6 +439,8 @@ export const canonicalClassCode = name => {
   return m ? `KHÓA ${m[1].trim()}` : String(name ?? '').trim().toUpperCase().slice(0, 40);
 };
 
+const EXCEL_PAYMENT_NOTE = 'Chuyển từ Excel';
+
 const importStudents = async (request, ctx) => {
   const { store } = ctx;
   const body = await readBody(request);
@@ -447,9 +449,12 @@ const importStudents = async (request, ctx) => {
   const students = await listAll(store, 'students');
   const classes = await listAll(store, 'classes');
   const classByKey = new Map(classes.map(c => [normKey(c.code), c]));
+  const updateExisting = Boolean(body.updateExisting);
   const created = [];
+  const updated = [];
   const skipped = [];
   const classesCreated = [];
+  const feeKept = [];
 
   for (const [index, row] of rows.entries()) {
     const fullName = text(row.fullName, 120);
@@ -457,11 +462,12 @@ const importStudents = async (request, ctx) => {
     const phoneDigits = digits(row.phone);
     const phone = /^0\d{9,10}$/.test(phoneDigits) ? phoneDigits : '';
     const code = text(row.code, 20).toUpperCase();
-    if (code && students.some(x => String(x.code).toUpperCase() === code)) {
-      skipped.push({ row: index + 1, name: fullName, reason: `Mã ${code} đã có` }); continue;
+    const existing = code ? students.find(x => String(x.code).toUpperCase() === code) : null;
+    if (existing && !updateExisting) {
+      skipped.push({ row: index + 1, name: fullName, reason: `Số báo danh ${code} đã có` }); continue;
     }
-    if (phone && students.some(x => x.phone === phone)) {
-      skipped.push({ row: index + 1, name: fullName, reason: `SĐT ${phone} đã có` }); continue;
+    if (phone && students.some(x => x.phone === phone && x !== existing)) {
+      skipped.push({ row: index + 1, name: fullName, reason: `SĐT ${phone} đã có ở học viên khác` }); continue;
     }
 
     let classId = '';
@@ -486,17 +492,53 @@ const importStudents = async (request, ctx) => {
     const owed = money(row.owed);
     const birthYear = Number.parseInt(row.birthYear, 10);
     const dob = /^\d{4}-\d{2}-\d{2}$/.test(String(row.dateOfBirth ?? '')) ? row.dateOfBirth : '';
-    const student = {
-      id: newId('hv'),
-      code: code || nextStudentCode(students),
+    const excelPayments = paid
+      ? [{ id: newId('tt'), date: requireDate(row.paidDate ?? '', 'Ngày thu'), amount: paid, note: EXCEL_PAYMENT_NOTE }]
+      : [];
+    const fields = {
       fullName,
       phone,
-      email: '',
       dateOfBirth: dob,
       birthYear: birthYear >= 1940 && birthYear <= 2030 ? birthYear : '',
       gender: oneOf(row.gender, ['nam', 'nu'], ''),
       address: text(row.address, 240),
       goal: text(row.goal, 80),
+      busFee: money(row.busFee),
+      topikExam: text(row.topikExam, 160),
+      note: text(row.note, 1600),
+    };
+
+    if (existing) {
+      // Cập nhật: ô trống trong Excel thì giữ nguyên thông tin đang có trong app.
+      const next = { ...existing, updatedAt: now() };
+      for (const [key, value] of Object.entries(fields)) {
+        if (value !== '' && value !== 0) next[key] = value;
+      }
+      if (row.status) next.status = oneOf(row.status, STUDENT_STATUSES, existing.status);
+      if (classId && classId !== existing.classId) {
+        next.classHistory = [...(existing.classHistory ?? [])];
+        if (existing.classId) next.classHistory.push({ classId: existing.classId, from: existing.enrolledAt, to: now().slice(0, 10) });
+        next.classId = classId;
+        next.enrolledAt = '';
+      }
+      // Học phí chỉ cập nhật theo Excel khi trong app chưa ghi lần đóng tiền nào khác.
+      const onlyExcel = (existing.payments ?? []).every(x => x.note === EXCEL_PAYMENT_NOTE);
+      if (onlyExcel) {
+        next.payments = excelPayments;
+        next.tuitionFee = paid + owed;
+      } else if (paid || owed) {
+        feeKept.push(`${code} ${fullName}`);
+      }
+      await save(store, 'students', next);
+      Object.assign(existing, next);
+      updated.push(code);
+      continue;
+    }
+
+    const student = {
+      id: newId('hv'),
+      code: code || nextStudentCode(students),
+      email: '',
       level: '',
       classId,
       enrolledAt: '',
@@ -504,10 +546,8 @@ const importStudents = async (request, ctx) => {
       status: oneOf(row.status, STUDENT_STATUSES, 'dang_hoc'),
       tuitionFee: paid + owed,
       discount: 0,
-      payments: paid ? [{ id: newId('tt'), date: requireDate(row.paidDate ?? '', 'Ngày thu'), amount: paid, note: 'Chuyển từ Excel' }] : [],
-      busFee: money(row.busFee),
-      topikExam: text(row.topikExam, 160),
-      note: text(row.note, 1600),
+      payments: excelPayments,
+      ...fields,
       createdAt: now(),
       updatedAt: now(),
     };
@@ -515,7 +555,7 @@ const importStudents = async (request, ctx) => {
     students.push(student);
     created.push(student.code);
   }
-  return json({ created: created.length, skipped, classesCreated });
+  return json({ created: created.length, updated: updated.length, skipped, classesCreated, feeKept });
 };
 
 // ---------- Router ----------

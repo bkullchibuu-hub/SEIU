@@ -6,6 +6,8 @@ import { ErrorBox, Modal } from './ui';
 
 interface ImportResult {
   created: number;
+  updated: number;
+  feeKept: string[];
   skipped: { row: number; name?: string; reason: string }[];
   classesCreated: string[];
 }
@@ -16,6 +18,7 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<ImportResult | null>(null);
+  const [updateExisting, setUpdateExisting] = useState(true);
 
   const parsed = useMemo(() => (text.trim() ? parseExcelPaste(text) : null), [text]);
   const classNames = [...new Set((parsed?.rows ?? []).map(r => r.className).filter(Boolean))];
@@ -25,7 +28,7 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
     setBusy(true);
     setError('');
     try {
-      const res = await api<ImportResult>('POST', 'import/students', { rows: parsed.rows });
+      const res = await api<ImportResult>('POST', 'import/students', { rows: parsed.rows, updateExisting });
       setResult(res);
       await onImported();
     } catch (err) {
@@ -38,7 +41,14 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
   if (result) {
     return (
       <Modal title="Đã nhập xong" onClose={onClose} wide>
-        <div className="alert alert-success">Đã nhập <b>{result.created}</b> học viên.</div>
+        <div className="alert alert-success">
+          Đã thêm mới <b>{result.created}</b> học viên{result.updated ? <>, cập nhật <b>{result.updated}</b> học viên đã có</> : null}.
+        </div>
+        {result.feeKept.length > 0 && (
+          <p className="small">
+            Giữ nguyên học phí trong app (vì đã ghi lần đóng tiền trong app) cho: {result.feeKept.join(', ')}.
+          </p>
+        )}
         {result.classesCreated.length > 0 && (
           <p>
             Đã tạo {result.classesCreated.length} lớp mới: <b>{result.classesCreated.join(', ')}</b>.
@@ -65,7 +75,7 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
       <ol className="import-steps">
         <li>Trong Excel, bôi đen bảng học viên <b>kể cả dòng tiêu đề</b> (STT, Số báo danh, Họ và tên, SĐT…) rồi bấm Ctrl+C.</li>
         <li>Bấm vào ô bên dưới và dán (Ctrl+V).</li>
-        <li>Xem lại bảng xem trước rồi bấm <b>Nhập</b>. Học viên trùng số báo danh hoặc SĐT đã có sẽ được bỏ qua.</li>
+        <li>Xem lại bảng xem trước rồi bấm <b>Nhập</b>.</li>
       </ol>
       <textarea
         className="import-box"
@@ -75,6 +85,13 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
         placeholder="Dán bảng Excel vào đây…"
         aria-label="Dán bảng Excel"
       />
+      <label className="check import-update">
+        <input type="checkbox" checked={updateExisting} onChange={e => setUpdateExisting(e.target.checked)} />
+        <span>
+          Cập nhật học viên đã có (cùng số báo danh) theo bảng mới.
+          <span className="muted small"> Ô trống trong Excel thì giữ nguyên thông tin trong app. Bỏ chọn để chỉ thêm người mới.</span>
+        </span>
+      </label>
       <ErrorBox message={error} />
 
       {parsed && !parsed.headerFound && (

@@ -203,3 +203,40 @@ test('lớp học: chọn thứ và giờ thì tự tạo lịch học', async (
   assert.equal(data.item.monitor, 'Hân');
   assert.equal((await call('POST', 'classes', { token: admin, body: { code: 'K38', level: 'x', capacity: 5, startTime: '20:00', endTime: '18:00' } })).status, 400);
 });
+
+test('nhập lại bảng Excel: cập nhật theo số báo danh, giữ học phí đã ghi trong app', async () => {
+  const { admin } = await setup();
+  await call('POST', 'import/students', { token: admin, body: { rows: [
+    { code: '400', fullName: 'LÊ NGỌC THẢO', phone: '0790977179', className: 'KHOÁ 31', paid: '7.000.000,00', owed: '800.000' },
+    { code: '401', fullName: 'LÊ CÔNG TAO', className: 'KHOÁ 31', paid: '7.000.000,00', owed: '800.000' },
+  ] } });
+  let { data } = await call('GET', 'overview', { token: admin });
+  const tao = data.students.find(s => s.code === '401');
+  // Trong app đã ghi thêm 1 lần đóng tiền cho Tao.
+  await call('PUT', `students/${tao.id}`, { token: admin, body: {
+    ...tao, payments: [...tao.payments, { date: '2026-10-01', amount: 800000, note: 'Lần 2' }],
+  } });
+
+  const again = await call('POST', 'import/students', { token: admin, body: { updateExisting: true, rows: [
+    { code: '400', fullName: 'LÊ NGỌC THẢO', phone: '', address: 'VỊ THANH', className: 'KHOÁ 32', paid: '7.800.000', owed: '0' },
+    { code: '401', fullName: 'LÊ CÔNG TAO', className: 'KHOÁ 31', paid: '9.000.000', owed: '0' },
+    { code: '', fullName: 'Người mới', className: 'KHOÁ 31' },
+  ] } });
+  assert.equal(again.data.created, 1);
+  assert.equal(again.data.updated, 2);
+  assert.deepEqual(again.data.feeKept, ['401 LÊ CÔNG TAO']);
+
+  ({ data } = await call('GET', 'overview', { token: admin }));
+  const thao = data.students.find(s => s.code === '400');
+  assert.equal(thao.phone, '0790977179'); // ô SĐT trống → giữ số cũ
+  assert.equal(thao.address, 'VỊ THANH');
+  assert.equal(thao.stats.paid, 7800000);
+  assert.equal(thao.stats.owed, 0);
+  assert.equal(data.classes.find(c => c.id === thao.classId).code, 'KHÓA 32');
+  assert.equal(thao.classHistory.length, 1);
+  const tao2 = data.students.find(s => s.code === '401');
+  assert.equal(tao2.stats.paid, 7800000); // giữ các lần đóng ghi trong app
+
+  const noUpdate = await call('POST', 'import/students', { token: admin, body: { rows: [{ code: '400', fullName: 'X' }] } });
+  assert.equal(noUpdate.data.skipped.length, 1);
+});
