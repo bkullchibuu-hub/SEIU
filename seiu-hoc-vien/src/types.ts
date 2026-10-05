@@ -1,4 +1,12 @@
-export type Role = 'admin' | 'teacher';
+export type AccountRole = 'teacher' | 'staff' | 'accountant';
+export type Role = 'admin' | AccountRole;
+export const ACCOUNT_ROLES: AccountRole[] = ['teacher', 'staff', 'accountant'];
+export const ROLE_INFO: Record<Role, { label: string; can: string }> = {
+  admin: { label: 'Quản trị', can: 'Toàn quyền, quản lý tài khoản' },
+  teacher: { label: 'Giáo viên', can: 'Lớp mình dạy: điểm danh, nội dung học, lịch dạy' },
+  staff: { label: 'Nhân viên', can: 'Học viên, xếp lớp, lớp học, thời khóa biểu, nhập Excel. Không xem học phí' },
+  accountant: { label: 'Kế toán', can: 'Học phí, các lần đóng tiền, công nợ. Không sửa hồ sơ, lớp, điểm danh' },
+};
 
 export interface User {
   role: Role;
@@ -8,6 +16,7 @@ export interface User {
 
 export interface Teacher {
   id: string;
+  role?: AccountRole;
   fullName: string;
   phone: string;
   email: string;
@@ -80,9 +89,10 @@ export interface StudentStats {
   attended: number;
   absent: number;
   late: number;
-  paid: number;
-  owed: number;
-  lastPaymentDate: string;
+  // Chỉ có khi tài khoản được xem học phí.
+  paid?: number;
+  owed?: number;
+  lastPaymentDate?: string;
 }
 
 export type StudentRow = Student & { stats: StudentStats };

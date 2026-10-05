@@ -23,16 +23,16 @@ export const classOptionLabel = (c: ClassRoom) =>
   `${c.code}${c.level ? ` – ${c.level}` : ''} (${c.studentCount}/${c.capacity})`;
 
 // Xuất bảng ra file CSV mở được bằng Excel (có BOM để giữ tiếng Việt).
-const exportCsv = (rows: StudentRow[], className: (id: string) => string) => {
+const exportCsv = (rows: StudentRow[], className: (id: string) => string, withFees: boolean) => {
+  const feeCols = ['Học phí', 'Giảm/miễn trừ', 'Đã đóng', 'Còn nợ', 'Ngày thu gần nhất'];
   const header = ['STT', 'Số báo danh', 'Họ và tên', 'SĐT', 'Năm sinh', 'Giới tính', 'Địa chỉ', 'Mục tiêu', 'Lớp học',
-    'Trạng thái', 'Số buổi đã học', 'Vắng', 'Học phí', 'Giảm/miễn trừ', 'Đã đóng', 'Còn nợ', 'Ngày thu gần nhất',
-    'Thi TOPIK', 'Tiền xe', 'Ghi chú'];
+    'Trạng thái', 'Số buổi đã học', 'Vắng', ...(withFees ? feeCols : []), 'Thi TOPIK', ...(withFees ? ['Tiền xe'] : []), 'Ghi chú'];
   const cell = (v: unknown) => `"${String(v ?? '').replace(/"/g, '""')}"`;
   const lines = rows.map((s, i) => [
     i + 1, s.code, s.fullName, s.phone, birthLabel(s), s.gender === 'nu' ? 'Nữ' : s.gender === 'nam' ? 'Nam' : '',
     s.address, s.goal, className(s.classId), STUDENT_STATUS_LABELS[s.status], s.stats.attended, s.stats.absent,
-    s.tuitionFee ?? 0, s.discount ?? 0, s.stats.paid, s.stats.owed, formatDate(s.stats.lastPaymentDate),
-    s.topikExam, s.busFee ?? 0, s.note,
+    ...(withFees ? [s.tuitionFee ?? 0, s.discount ?? 0, s.stats.paid, s.stats.owed, formatDate(s.stats.lastPaymentDate ?? '')] : []),
+    s.topikExam, ...(withFees ? [s.busFee ?? 0] : []), s.note,
   ].map(cell).join(','));
   const blob = new Blob([`﻿${[header.map(cell).join(','), ...lines].join('\r\n')}`], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
@@ -42,7 +42,7 @@ const exportCsv = (rows: StudentRow[], className: (id: string) => string) => {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 };
 
-export const StudentsTab = ({ data, reload }: AdminTabProps) => {
+export const StudentsTab = ({ data, reload, perms }: AdminTabProps) => {
   const [query, setQuery] = useState('');
   const [classFilter, setClassFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<StudentStatus | ''>('dang_hoc');
@@ -51,6 +51,8 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
   const [editing, setEditing] = useState<Student | 'new' | null>(null);
   const [deleting, setDeleting] = useState<Student | null>(null);
   const [importing, setImporting] = useState(false);
+  const [feeEditing, setFeeEditing] = useState<StudentRow | null>(null);
+  const open = (s: StudentRow) => (perms.editStudents ? setEditing(s) : perms.fees ? setFeeEditing(s) : undefined);
 
   const classById = useMemo(() => new Map(data.classes.map(c => [c.id, c])), [data.classes]);
   const className = (id: string) => classById.get(id)?.code ?? '';
@@ -66,17 +68,16 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
       (!statusFilter || s.status === statusFilter)
       && (!classFilter || (classFilter === 'none' ? !s.classId : s.classId === classFilter))
       && (!goalFilter || s.goal === goalFilter)
-      && (!owingOnly || s.stats.owed > 0)
+      && (!owingOnly || (s.stats.owed ?? 0) > 0)
       && (!q
         || normalize(`${s.code} ${s.fullName} ${s.email} ${s.address}`).includes(q)
         || (qDigits.length >= 3 && s.phone.includes(qDigits))));
   }, [data.students, query, classFilter, statusFilter, goalFilter, owingOnly]);
 
   const totals = rows.reduce((t, s) => ({
-    fee: t.fee + (s.tuitionFee ?? 0) - (s.discount ?? 0),
-    paid: t.paid + s.stats.paid,
-    owed: t.owed + Math.max(0, s.stats.owed),
-  }), { fee: 0, paid: 0, owed: 0 });
+    paid: t.paid + (s.stats.paid ?? 0),
+    owed: t.owed + Math.max(0, s.stats.owed ?? 0),
+  }), { paid: 0, owed: 0 });
 
   return (
     <section>
@@ -88,9 +89,9 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
           value={query}
           onChange={e => setQuery(e.target.value)}
         />
-        <button type="button" className="btn" onClick={() => setImporting(true)}>Nhập từ Excel</button>
-        <button type="button" className="btn" onClick={() => exportCsv(rows, className)} disabled={!rows.length}>Xuất Excel</button>
-        <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>+ Thêm học viên</button>
+        {perms.editStudents && <button type="button" className="btn" onClick={() => setImporting(true)}>Nhập từ Excel</button>}
+        <button type="button" className="btn" onClick={() => exportCsv(rows, className, perms.fees)} disabled={!rows.length}>Xuất Excel</button>
+        {perms.editStudents && <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>+ Thêm học viên</button>}
       </div>
       <div className="toolbar">
         <select value={classFilter} onChange={e => setClassFilter(e.target.value)} aria-label="Lọc theo lớp">
@@ -106,15 +107,22 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
           <option value="">Mọi mục tiêu</option>
           {goals.map(g => <option key={g} value={g}>{g}</option>)}
         </select>
-        <label className="check">
-          <input type="checkbox" checked={owingOnly} onChange={e => setOwingOnly(e.target.checked)} />
-          Chỉ học viên còn nợ
-        </label>
+        {perms.fees && (
+          <label className="check">
+            <input type="checkbox" checked={owingOnly} onChange={e => setOwingOnly(e.target.checked)} />
+            Chỉ học viên còn nợ
+          </label>
+        )}
       </div>
 
       <p className="muted small">
-        {rows.length} / {data.students.length} học viên · Đã đóng <b>{formatMoney(totals.paid)}</b>
-        {' '}· Còn nợ <b className={totals.owed ? 'text-red' : ''}>{formatMoney(totals.owed)}</b>
+        {rows.length} / {data.students.length} học viên
+        {perms.fees && (
+          <>
+            {' '}· Đã đóng <b>{formatMoney(totals.paid)}</b>
+            {' '}· Còn nợ <b className={totals.owed ? 'text-red' : ''}>{formatMoney(totals.owed)}</b>
+          </>
+        )}
       </p>
 
       {rows.length === 0 ? (
@@ -131,8 +139,10 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
                 <th>STT</th><th>SBD</th><th className="sticky-col">Họ và tên</th><th>SĐT</th><th>Năm sinh</th>
                 <th>GT</th><th>Địa chỉ</th><th>Mục tiêu</th><th>Lớp</th><th>Trạng thái</th>
                 <th className="num">Đã học</th><th className="num">Vắng</th>
-                <th className="num">Học phí</th><th className="num">Đã đóng</th><th className="num">Còn nợ</th>
-                <th>Thu gần nhất</th><th>Thi TOPIK</th><th className="num">Tiền xe</th><th>Ghi chú</th><th />
+                {perms.fees && (
+                  <><th className="num">Học phí</th><th className="num">Đã đóng</th><th className="num">Còn nợ</th><th>Thu gần nhất</th></>
+                )}
+                <th>Thi TOPIK</th>{perms.fees && <th className="num">Tiền xe</th>}<th>Ghi chú</th><th />
               </tr>
             </thead>
             <tbody>
@@ -141,7 +151,7 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
                   <td className="muted">{i + 1}</td>
                   <td className="mono">{s.code}</td>
                   <td className="sticky-col">
-                    <button type="button" className="link" onClick={() => setEditing(s)}>{s.fullName}</button>
+                    <button type="button" className="link" onClick={() => open(s)}>{s.fullName}</button>
                   </td>
                   <td className="nowrap">{formatPhone(s.phone)}</td>
                   <td className="nowrap">{birthLabel(s)}</td>
@@ -152,18 +162,28 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
                   <td><StudentStatusBadge status={s.status} /></td>
                   <td className="num">{s.stats.attended}</td>
                   <td className={`num ${s.stats.absent >= 3 ? 'text-red' : ''}`}>{s.stats.absent}</td>
-                  <td className="num">{s.tuitionFee ? formatMoney((s.tuitionFee ?? 0) - (s.discount ?? 0)) : ''}</td>
-                  <td className="num">{s.stats.paid ? formatMoney(s.stats.paid) : ''}</td>
-                  <td className="num">
-                    {s.stats.owed > 0 ? <Badge tone="red">{formatMoney(s.stats.owed)}</Badge> : s.tuitionFee ? <span className="muted">Đủ</span> : ''}
-                  </td>
-                  <td className="nowrap">{formatDate(s.stats.lastPaymentDate)}</td>
+                  {perms.fees && (
+                    <>
+                      <td className="num">{s.tuitionFee ? formatMoney((s.tuitionFee ?? 0) - (s.discount ?? 0)) : ''}</td>
+                      <td className="num">{s.stats.paid ? formatMoney(s.stats.paid) : ''}</td>
+                      <td className="num">
+                        {(s.stats.owed ?? 0) > 0 ? <Badge tone="red">{formatMoney(s.stats.owed ?? 0)}</Badge> : s.tuitionFee ? <span className="muted">Đủ</span> : ''}
+                      </td>
+                      <td className="nowrap">{formatDate(s.stats.lastPaymentDate ?? '')}</td>
+                    </>
+                  )}
                   <td className="cell-clip" title={s.topikExam}>{s.topikExam}</td>
-                  <td className="num">{s.busFee ? formatMoney(s.busFee) : ''}</td>
+                  {perms.fees && <td className="num">{s.busFee ? formatMoney(s.busFee) : ''}</td>}
                   <td className="cell-clip" title={s.note}>{s.note}</td>
                   <td className="actions">
-                    <button type="button" className="btn btn-sm" onClick={() => setEditing(s)}>Sửa</button>
-                    <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setDeleting(s)}>Xóa</button>
+                    {perms.editStudents ? (
+                      <>
+                        <button type="button" className="btn btn-sm" onClick={() => setEditing(s)}>Sửa</button>
+                        <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setDeleting(s)}>Xóa</button>
+                      </>
+                    ) : perms.fees ? (
+                      <button type="button" className="btn btn-sm" onClick={() => setFeeEditing(s)}>Ghi học phí</button>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -177,6 +197,7 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
           key={editing === 'new' ? 'new' : editing.id}
           student={editing === 'new' ? null : editing}
           classes={data.classes}
+          canFees={perms.fees}
           onClose={() => setEditing(null)}
           onSaved={reload}
           onOpenExisting={id => {
@@ -196,7 +217,16 @@ export const StudentsTab = ({ data, reload }: AdminTabProps) => {
           }}
         />
       )}
-      {importing && <ImportDialog onClose={() => setImporting(false)} onImported={reload} />}
+      {importing && <ImportDialog onClose={() => setImporting(false)} onImported={reload} showFees={perms.fees} />}
+      {feeEditing && (
+        <FeeForm
+          key={feeEditing.id}
+          student={feeEditing}
+          className={className(feeEditing.classId)}
+          onClose={() => setFeeEditing(null)}
+          onSaved={reload}
+        />
+      )}
     </section>
   );
 };
@@ -219,9 +249,10 @@ const MoneyInput = ({ value, onChange, id }: { value: number; onChange: (v: numb
   />
 );
 
-export const StudentForm = ({ student, classes, onClose, onSaved, onOpenExisting, presetClassId = '' }: {
+export const StudentForm = ({ student, classes, onClose, onSaved, onOpenExisting, presetClassId = '', canFees = true }: {
   student: Student | null;
   classes: ClassRoom[];
+  canFees?: boolean;
   onClose: () => void;
   onSaved: () => Promise<void>;
   onOpenExisting?: (id: string) => void;
@@ -239,13 +270,9 @@ export const StudentForm = ({ student, classes, onClose, onSaved, onOpenExisting
   const [busy, setBusy] = useState(false);
 
   const set = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => setForm(f => ({ ...f, [key]: value }));
-  const setPayment = (i: number, patch: Partial<Payment>) =>
-    setForm(f => ({ ...f, payments: f.payments.map((p, j) => (j === i ? { ...p, ...patch } : p)) }));
 
   const selectableClasses = classes.filter(c => c.status === 'dang_mo' || c.id === form.classId);
   const classChanged = student && student.classId !== form.classId;
-  const paid = form.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
-  const owed = (form.tuitionFee || 0) - (form.discount || 0) - paid;
 
   const chooseClass = (classId: string) => {
     setForm(f => ({
@@ -367,54 +394,7 @@ export const StudentForm = ({ student, classes, onClose, onSaved, onOpenExisting
           </Field>
         </div>
 
-        <h3 className="form-section">Học phí <span className="muted small">(chỉ quản trị xem được)</span></h3>
-        <div className="grid grid-3">
-          <Field label="Học phí khóa">
-            <MoneyInput value={form.tuitionFee} onChange={v => set('tuitionFee', v)} />
-          </Field>
-          <Field label="Giảm / miễn trừ">
-            <MoneyInput value={form.discount} onChange={v => set('discount', v)} />
-          </Field>
-          <Field label="Tiền xe">
-            <MoneyInput value={form.busFee} onChange={v => set('busFee', v)} />
-          </Field>
-        </div>
-        <div className="payments">
-          <div className="payments-head">
-            <b>Các lần đóng tiền</b>
-            <button
-              type="button"
-              className="btn btn-sm"
-              onClick={() => set('payments', [...form.payments, { date: today(), amount: 0, note: `Lần ${form.payments.length + 1}` }])}
-            >
-              + Thêm lần đóng
-            </button>
-          </div>
-          {form.payments.length === 0 && <p className="muted small">Chưa có lần đóng tiền nào.</p>}
-          {form.payments.map((p, i) => (
-            <div key={p.id ?? `new-${i}`} className="payment-row">
-              <input type="date" aria-label={`Ngày đóng lần ${i + 1}`} value={p.date} onChange={e => setPayment(i, { date: e.target.value })} />
-              <MoneyInput value={p.amount} onChange={v => setPayment(i, { amount: v })} />
-              <input aria-label={`Ghi chú lần ${i + 1}`} value={p.note} onChange={e => setPayment(i, { note: e.target.value })} placeholder="Ghi chú" />
-              <button
-                type="button"
-                className="btn btn-sm btn-danger-ghost"
-                onClick={() => set('payments', form.payments.filter((_, j) => j !== i))}
-                aria-label={`Xóa lần đóng ${i + 1}`}
-              >
-                ×
-              </button>
-            </div>
-          ))}
-          <div className="payment-sum">
-            <span>Đã đóng: <b>{formatMoney(paid)}</b></span>
-            <span>
-              {owed > 0 ? <>Còn nợ: <b className="text-red">{formatMoney(owed)}</b></>
-                : owed < 0 ? <>Đóng dư: <b>{formatMoney(-owed)}</b></>
-                  : form.tuitionFee ? <b className="text-green">Đã đóng đủ</b> : null}
-            </span>
-          </div>
-        </div>
+        {canFees && <FeeEditor value={form} onChange={patch => setForm(f => ({ ...f, ...patch }))} />}
 
         <div className="grid">
           <Field label="Thi TOPIK đăng ký">
@@ -445,6 +425,128 @@ export const StudentForm = ({ student, classes, onClose, onSaved, onOpenExisting
             <button type="button" className="btn" disabled={busy} onClick={e => submit(e, true)}>Lưu và nhập tiếp</button>
           )}
           <button className="btn btn-primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu'}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+};
+
+interface FeeValue {
+  tuitionFee: number;
+  discount: number;
+  busFee: number;
+  payments: Payment[];
+}
+
+// Phần học phí: học phí khóa, giảm, tiền xe và các lần đóng tiền.
+const FeeEditor = ({ value, onChange }: { value: FeeValue; onChange: (patch: Partial<FeeValue>) => void }) => {
+  const paid = value.payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const owed = (value.tuitionFee || 0) - (value.discount || 0) - paid;
+  const setPayment = (i: number, patch: Partial<Payment>) =>
+    onChange({ payments: value.payments.map((p, j) => (j === i ? { ...p, ...patch } : p)) });
+
+  return (
+    <>
+      <h3 className="form-section">Học phí <span className="muted small">(chỉ quản trị và kế toán xem được)</span></h3>
+      <div className="grid grid-3">
+        <Field label="Học phí khóa">
+          <MoneyInput value={value.tuitionFee} onChange={v => onChange({ tuitionFee: v })} />
+        </Field>
+        <Field label="Giảm / miễn trừ">
+          <MoneyInput value={value.discount} onChange={v => onChange({ discount: v })} />
+        </Field>
+        <Field label="Tiền xe">
+          <MoneyInput value={value.busFee} onChange={v => onChange({ busFee: v })} />
+        </Field>
+      </div>
+      <div className="payments">
+        <div className="payments-head">
+          <b>Các lần đóng tiền</b>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => onChange({ payments: [...value.payments, { date: today(), amount: 0, note: `Lần ${value.payments.length + 1}` }] })}
+          >
+            + Thêm lần đóng
+          </button>
+        </div>
+        {value.payments.length === 0 && <p className="muted small">Chưa có lần đóng tiền nào.</p>}
+        {value.payments.map((p, i) => (
+          <div key={p.id ?? `new-${i}`} className="payment-row">
+            <input type="date" aria-label={`Ngày đóng lần ${i + 1}`} value={p.date} onChange={e => setPayment(i, { date: e.target.value })} />
+            <MoneyInput value={p.amount} onChange={v => setPayment(i, { amount: v })} />
+            <input aria-label={`Ghi chú lần ${i + 1}`} value={p.note} onChange={e => setPayment(i, { note: e.target.value })} placeholder="Ghi chú" />
+            <button
+              type="button"
+              className="btn btn-sm btn-danger-ghost"
+              onClick={() => onChange({ payments: value.payments.filter((_, j) => j !== i) })}
+              aria-label={`Xóa lần đóng ${i + 1}`}
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <div className="payment-sum">
+          <span>Đã đóng: <b>{formatMoney(paid)}</b></span>
+          <span>
+            {owed > 0 ? <>Còn nợ: <b className="text-red">{formatMoney(owed)}</b></>
+              : owed < 0 ? <>Đóng dư: <b>{formatMoney(-owed)}</b></>
+                : value.tuitionFee ? <b className="text-green">Đã đóng đủ</b> : null}
+          </span>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// Form của kế toán: chỉ sửa phần học phí, xem thông tin học viên.
+const FeeForm = ({ student, className, onClose, onSaved }: {
+  student: StudentRow;
+  className: string;
+  onClose: () => void;
+  onSaved: () => Promise<void>;
+}) => {
+  const [form, setForm] = useState({
+    tuitionFee: student.tuitionFee ?? 0,
+    discount: student.discount ?? 0,
+    busFee: student.busFee ?? 0,
+    payments: [...(student.payments ?? [])],
+    topikExam: student.topikExam ?? '',
+  });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError('');
+    try {
+      await api('PUT', `students/${student.id}/fees`, { ...form, payments: form.payments.filter(p => p.amount > 0) });
+      await onSaved();
+      onClose();
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`Học phí – ${student.code} ${student.fullName}`} onClose={onClose} wide>
+      <form onSubmit={submit}>
+        <ErrorBox message={error} />
+        <div className="detail-meta">
+          <span><b>Lớp:</b> {className || 'Chưa xếp'}</span>
+          <span><b>SĐT:</b> {formatPhone(student.phone) || '—'}</span>
+          <span><b>Mục tiêu:</b> {student.goal || '—'}</span>
+          <span><b>Trạng thái:</b> {STUDENT_STATUS_LABELS[student.status]}</span>
+        </div>
+        <FeeEditor value={form} onChange={patch => setForm(f => ({ ...f, ...patch }))} />
+        <Field label="Thi TOPIK đăng ký">
+          <input value={form.topikExam} onChange={e => setForm(f => ({ ...f, topikExam: e.target.value }))} placeholder="VD: TOPIK 104 – đã đóng phí" />
+        </Field>
+        <div className="form-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose}>Hủy</button>
+          <button className="btn btn-primary" disabled={busy}>{busy ? 'Đang lưu…' : 'Lưu học phí'}</button>
         </div>
       </form>
     </Modal>

@@ -240,3 +240,59 @@ test('nhập lại bảng Excel: cập nhật theo số báo danh, giữ học p
   const noUpdate = await call('POST', 'import/students', { token: admin, body: { rows: [{ code: '400', fullName: 'X' }] } });
   assert.equal(noUpdate.data.skipped.length, 1);
 });
+
+test('phân quyền: nhân viên, kế toán, giáo viên chỉ làm được việc của mình', async () => {
+  const { admin, gvA, lopA } = await setup();
+  await call('POST', 'teachers', { token: admin, body: { fullName: 'NV Lan', username: 'lan', password: '123456', role: 'staff' } });
+  await call('POST', 'teachers', { token: admin, body: { fullName: 'KT Mai', username: 'mai', password: '123456', role: 'accountant' } });
+  const staff = await loginAs('lan', '123456');
+  const acct = await loginAs('mai', '123456');
+  const kim = await loginAs('kim', 'matkhau1');
+  assert.equal((await call('GET', 'me', { token: staff })).data.user.role, 'staff');
+
+  // Nhân viên: thêm học viên được, nhưng không ghi/không thấy học phí.
+  const hv = await call('POST', 'students', { token: staff, body: {
+    fullName: 'HV Nhân viên nhập', phone: '0977777777', classId: lopA.id, tuitionFee: 5000000,
+    payments: [{ date: '2026-10-01', amount: 5000000 }],
+  } });
+  assert.equal(hv.status, 201);
+  assert.equal('tuitionFee' in hv.data.item, false);
+  const ovStaff = (await call('GET', 'overview', { token: staff })).data;
+  const rowStaff = ovStaff.students.find(s => s.id === hv.data.item.id);
+  assert.equal('payments' in rowStaff, false);
+  assert.equal('owed' in rowStaff.stats, false);
+  assert.equal((await call('POST', 'classes', { token: staff, body: { code: 'NV-1', level: 'Sơ cấp 1', capacity: 10 } })).status, 201);
+  assert.equal((await call('GET', `classes/${lopA.id}/sessions`, { token: staff })).status, 200);
+  assert.equal((await call('PUT', `classes/${lopA.id}/sessions/1`, { token: staff, body: { date: '2026-10-01' } })).status, 403);
+  assert.equal((await call('GET', 'teachers', { token: staff })).status, 403);
+  assert.equal((await call('POST', 'teachers', { token: staff, body: {} })).status, 403);
+  assert.equal((await call('PUT', `students/${hv.data.item.id}/fees`, { token: staff, body: { tuitionFee: 1 } })).status, 403);
+
+  // Kế toán: ghi học phí được, không sửa hồ sơ, không tạo lớp, không xem sổ điểm danh.
+  const fee = await call('PUT', `students/${hv.data.item.id}/fees`, { token: acct, body: {
+    tuitionFee: '7.000.000', payments: [{ date: '2026-10-01', amount: '3.000.000', note: 'Lần 1' }],
+  } });
+  assert.equal(fee.status, 200);
+  const rowAcct = (await call('GET', 'overview', { token: acct })).data.students.find(s => s.id === hv.data.item.id);
+  assert.equal(rowAcct.stats.owed, 4000000);
+  assert.equal(rowAcct.fullName, 'HV Nhân viên nhập');
+  assert.equal((await call('PUT', `students/${hv.data.item.id}`, { token: acct, body: { fullName: 'Đổi tên' } })).status, 403);
+  assert.equal((await call('POST', 'classes', { token: acct, body: { code: 'KT-1', level: 'x', capacity: 1 } })).status, 403);
+  assert.equal((await call('GET', `classes/${lopA.id}/sessions`, { token: acct })).status, 403);
+
+  // Nhân viên sửa hồ sơ không làm mất học phí kế toán đã ghi.
+  const full = (await call('GET', 'overview', { token: admin })).data.students.find(s => s.id === hv.data.item.id);
+  await call('PUT', `students/${hv.data.item.id}`, { token: staff, body: { ...stripForTest(full), address: 'Vị Thanh', tuitionFee: 0, payments: [] } });
+  const after = (await call('GET', 'overview', { token: admin })).data.students.find(s => s.id === hv.data.item.id);
+  assert.equal(after.address, 'Vị Thanh');
+  assert.equal(after.stats.paid, 3000000);
+
+  // Giáo viên không vào được bảng tổng thể; không gán lớp cho tài khoản không phải giáo viên.
+  assert.equal((await call('GET', 'overview', { token: kim })).status, 403);
+  const staffAcc = (await call('GET', 'teachers', { token: admin })).data.items.find(t => t.username === 'lan');
+  assert.equal((await call('PUT', `classes/${lopA.id}`, { token: admin, body: { ...lopA, teacherId: staffAcc.id } })).status, 400);
+  // Đổi vai trò giáo viên đang dạy lớp thì bị chặn.
+  assert.equal((await call('PUT', `teachers/${gvA.id}`, { token: admin, body: { ...gvA, role: 'staff' } })).status, 409);
+});
+
+const stripForTest = ({ stats, ...rest }) => rest;

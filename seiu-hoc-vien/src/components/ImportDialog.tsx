@@ -13,7 +13,11 @@ interface ImportResult {
 }
 
 // Dán bảng học viên copy từ Excel → xem trước → nhập.
-export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onImported: () => Promise<void> }) => {
+export const ImportDialog = ({ onClose, onImported, showFees = true }: {
+  onClose: () => void;
+  onImported: () => Promise<void>;
+  showFees?: boolean;
+}) => {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -75,7 +79,7 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
       <ol className="import-steps">
         <li>Trong Excel, bôi đen bảng học viên <b>kể cả dòng tiêu đề</b> (STT, Số báo danh, Họ và tên, SĐT…) rồi bấm Ctrl+C.</li>
         <li>Bấm vào ô bên dưới và dán (Ctrl+V).</li>
-        <li>Xem lại bảng xem trước rồi bấm <b>Nhập</b>.</li>
+        <li>Xem lại bảng xem trước rồi bấm <b>Nhập</b>.{!showFees && ' Cột học phí trong Excel sẽ không được nhập (dành cho kế toán).'}</li>
       </ol>
       <textarea
         className="import-box"
@@ -120,7 +124,7 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
               <thead>
                 <tr>
                   <th>SBD</th><th>Họ và tên</th><th>SĐT</th><th>Năm sinh</th><th>Lớp</th><th>Mục tiêu</th>
-                  <th className="num">Đã đóng</th><th className="num">Còn nợ</th><th>Ghi chú</th>
+                  {showFees && <><th className="num">Đã đóng</th><th className="num">Còn nợ</th></>}<th>Ghi chú</th>
                 </tr>
               </thead>
               <tbody>
@@ -132,8 +136,12 @@ export const ImportDialog = ({ onClose, onImported }: { onClose: () => void; onI
                     <td>{birthLabel(r)}</td>
                     <td className="nowrap">{r.className}</td>
                     <td>{r.goal}</td>
-                    <td className="num">{r.paid ? formatMoney(r.paid) : ''}</td>
-                    <td className="num">{r.owed ? formatMoney(r.owed) : ''}</td>
+                    {showFees && (
+                      <>
+                        <td className="num">{r.paid ? formatMoney(r.paid) : ''}</td>
+                        <td className="num">{r.owed ? formatMoney(r.owed) : ''}</td>
+                      </>
+                    )}
                     <td className="cell-clip small" title={r.note}>{r.note}</td>
                   </tr>
                 ))}

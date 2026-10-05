@@ -82,7 +82,30 @@ const getOne = async (store, kind, id, label) => {
 };
 const save = (store, kind, item) => store.set(`${kind}/${item.id}`, item);
 
-const publicTeacher = ({ passwordHash, passwordVersion, ...rest }) => rest;
+const publicTeacher = ({ passwordHash, passwordVersion, ...rest }) => ({ ...rest, role: rest.role ?? 'teacher' });
+
+// ---------- Vai trò & quyền ----------
+// Tài khoản lưu ở teachers/<id> (tên cũ), mỗi tài khoản có một vai trò.
+export const ACCOUNT_ROLES = ['teacher', 'staff', 'accountant'];
+const ROLE_LABELS = { teacher: 'giáo viên', staff: 'nhân viên', accountant: 'kế toán' };
+const PERMISSIONS = {
+  staff: ['overview', 'students:read', 'students:write', 'classes:read', 'classes:write', 'sessions:read', 'import'],
+  accountant: ['overview', 'students:read', 'fees', 'classes:read'],
+  teacher: [],
+};
+const can = (user, perm) => user.role === 'admin' || (PERMISSIONS[user.role] ?? []).includes(perm);
+const requirePerm = (user, perm) => {
+  if (!can(user, perm)) throw new HttpError(403, 'Tài khoản của bạn không có quyền thực hiện việc này.');
+};
+
+// Ẩn học phí / công nợ với tài khoản không có quyền xem tiền.
+const FEE_KEYS = ['tuitionFee', 'discount', 'payments', 'busFee'];
+const stripFees = student => {
+  const out = { ...student };
+  for (const key of FEE_KEYS) delete out[key];
+  if (out.stats) out.stats = { attended: out.stats.attended, absent: out.stats.absent, late: out.stats.late };
+  return out;
+};
 
 // ---------- Xác thực ----------
 const authenticate = async (request, ctx) => {
@@ -94,7 +117,7 @@ const authenticate = async (request, ctx) => {
   if (!teacher || !teacher.active || teacher.passwordVersion !== claims.pwv) {
     throw new HttpError(401, 'Tài khoản không còn hiệu lực, vui lòng đăng nhập lại.');
   }
-  return { role: 'teacher', id: teacher.id, fullName: teacher.fullName };
+  return { role: teacher.role ?? 'teacher', id: teacher.id, fullName: teacher.fullName };
 };
 
 // Tài khoản admin: dùng ctx.verifyAdmin nếu được cung cấp (VD: tài khoản quản trị website SEIU),
@@ -128,9 +151,9 @@ const login = async (request, ctx) => {
   if (teacher?.active && verifyPassword(password, teacher.passwordHash)) {
     await clearFailedLogins(ctx.store, username);
     const token = await createToken(ctx.store, ctx.env, {
-      sub: teacher.id, role: 'teacher', pwv: teacher.passwordVersion,
+      sub: teacher.id, role: teacher.role ?? 'teacher', pwv: teacher.passwordVersion,
     });
-    return json({ token, user: { role: 'teacher', id: teacher.id, fullName: teacher.fullName } });
+    return json({ token, user: { role: teacher.role ?? 'teacher', id: teacher.id, fullName: teacher.fullName } });
   }
   await recordFailedLogin(ctx.store, username);
   throw new HttpError(401, 'Sai tên đăng nhập hoặc mật khẩu.');
@@ -154,10 +177,18 @@ const teacherFromBody = async (body, ctx, existing) => {
   if (!existing && password.length < 6) throw new HttpError(400, 'Mật khẩu phải có ít nhất 6 ký tự.');
   if (existing && password && password.length < 6) throw new HttpError(400, 'Mật khẩu mới phải có ít nhất 6 ký tự.');
 
+  const role = oneOf(body.role, ACCOUNT_ROLES, existing?.role ?? 'teacher');
+  if (existing && role !== 'teacher' && (existing.role ?? 'teacher') === 'teacher') {
+    const taught = (await listAll(ctx.store, 'classes')).filter(c => c.teacherId === existing.id);
+    if (taught.length) {
+      throw new HttpError(409, `Tài khoản đang phụ trách lớp ${taught.map(c => c.code).join(', ')}. Hãy đổi giáo viên cho các lớp này trước khi đổi vai trò.`);
+    }
+  }
   const teacher = {
     ...existing,
     id: existing?.id ?? newId('gv'),
-    fullName: requireText(body.fullName, 'họ tên giáo viên', 120),
+    role,
+    fullName: requireText(body.fullName, 'họ tên', 120),
     phone: requirePhone(body.phone, { optional: true }),
     email: text(body.email, 160),
     username,
@@ -181,7 +212,10 @@ const classFromBody = async (body, ctx, existing) => {
     throw new HttpError(409, `Mã lớp ${code} đã tồn tại.`);
   }
   const teacherId = text(body.teacherId, 80);
-  if (teacherId) await getOne(ctx.store, 'teachers', teacherId, 'giáo viên');
+  if (teacherId) {
+    const t = await getOne(ctx.store, 'teachers', teacherId, 'giáo viên');
+    if ((t.role ?? 'teacher') !== 'teacher') throw new HttpError(400, `${t.fullName} là tài khoản ${ROLE_LABELS[t.role]}, không phải giáo viên.`);
+  }
   const capacity = Number.parseInt(body.capacity, 10);
   if (!Number.isInteger(capacity) || capacity < 1 || capacity > 200) {
     throw new HttpError(400, 'Sĩ số tối đa phải là số từ 1 đến 200.');
@@ -244,6 +278,13 @@ const nextStudentCode = students => {
   return `HV${String(max + 1).padStart(4, '0')}`;
 };
 
+const feeFields = body => ({
+  tuitionFee: money(body.tuitionFee),
+  discount: money(body.discount),
+  payments: paymentsFromBody(body.payments),
+  busFee: money(body.busFee),
+});
+
 const paymentsFromBody = list => (Array.isArray(list) ? list : []).slice(0, 60).map(p => ({
   id: /^[\w-]{1,60}$/.test(String(p?.id ?? '')) ? String(p.id) : newId('tt'),
   date: requireDate(p?.date ?? '', 'Ngày đóng tiền'),
@@ -298,10 +339,12 @@ const studentFromBody = async (body, ctx, existing) => {
     dateOfBirth: requireDate(body.dateOfBirth, 'Ngày sinh'),
     birthYear: birthYear === '' && body.dateOfBirth ? Number(String(body.dateOfBirth).slice(0, 4)) : birthYear,
     goal: text(body.goal, 80),
-    tuitionFee: money(body.tuitionFee),
-    discount: money(body.discount),
-    payments: paymentsFromBody(body.payments),
-    busFee: money(body.busFee),
+    ...(can(ctx.user, 'fees') ? feeFields(body) : {
+      tuitionFee: existing?.tuitionFee ?? 0,
+      discount: existing?.discount ?? 0,
+      payments: existing?.payments ?? [],
+      busFee: existing?.busFee ?? 0,
+    }),
     topikExam: text(body.topikExam, 160),
     gender: oneOf(body.gender, ['nam', 'nu', ''], ''),
     address: text(body.address, 240),
@@ -336,10 +379,14 @@ const studentsOfClass = (students, classId) => students.filter(
 const sessionsRoute = async (request, ctx, user, classId, numberParam) => {
   const { store } = ctx;
   const klass = await getOne(store, 'classes', classId, 'lớp học');
-  if (user.role !== 'admin' && klass.teacherId !== user.id) {
-    throw new HttpError(403, 'Bạn chỉ được xem và điểm danh lớp mình phụ trách.');
-  }
   const method = request.method;
+  const canWrite = user.role === 'admin' || (user.role === 'teacher' && klass.teacherId === user.id);
+  const canRead = canWrite || can(user, 'sessions:read');
+  if (!canRead || (method !== 'GET' && !canWrite)) {
+    throw new HttpError(403, user.role === 'teacher'
+      ? 'Bạn chỉ được xem và điểm danh lớp mình phụ trách.'
+      : 'Tài khoản của bạn chỉ được xem sổ điểm danh, không được sửa.');
+  }
   const students = studentsOfClass(await listAll(store, 'students'), classId);
 
   if (numberParam === undefined) {
@@ -392,7 +439,7 @@ const sessionsRoute = async (request, ctx, user, classId, numberParam) => {
 };
 
 // ---------- Bảng tổng thể (admin) ----------
-const overview = async ctx => {
+const overview = async (ctx, user) => {
   const { store } = ctx;
   const [students, classes, teachers] = await Promise.all([
     listAll(store, 'students'), listAll(store, 'classes'), listAll(store, 'teachers'),
@@ -430,7 +477,12 @@ const overview = async ctx => {
     const last = sessions[sessions.length - 1];
     return { ...c, sessionsDone: sessions.length, lastSessionDate: last?.date ?? '', lastContent: last?.content ?? '' };
   }).sort((a, b) => a.code.localeCompare(b.code, 'vi', { numeric: true }));
-  return json({ students: rows, classes: classRows, teachers: teachers.map(publicTeacher) });
+  const showFees = can(user, 'fees');
+  return json({
+    students: showFees ? rows : rows.map(stripFees),
+    classes: classRows,
+    teachers: teachers.map(publicTeacher).map(t => ({ id: t.id, fullName: t.fullName, role: t.role, active: t.active })),
+  });
 };
 
 // Nhập học viên hàng loạt (dán từ Excel). Lớp chưa có sẽ được tạo theo tên.
@@ -442,7 +494,8 @@ export const canonicalClassCode = name => {
 
 const EXCEL_PAYMENT_NOTE = 'Chuyển từ Excel';
 
-const importStudents = async (request, ctx) => {
+const importStudents = async (request, ctx, user) => {
+  const withFees = can(user, 'fees');
   const { store } = ctx;
   const body = await readBody(request);
   const rows = Array.isArray(body.rows) ? body.rows.slice(0, 2000) : [];
@@ -504,7 +557,7 @@ const importStudents = async (request, ctx) => {
       gender: oneOf(row.gender, ['nam', 'nu'], ''),
       address: text(row.address, 240),
       goal: text(row.goal, 80),
-      busFee: money(row.busFee),
+      ...(withFees ? { busFee: money(row.busFee) } : {}),
       topikExam: text(row.topikExam, 160),
       note: text(row.note, 1600),
     };
@@ -524,7 +577,9 @@ const importStudents = async (request, ctx) => {
       }
       // Học phí chỉ cập nhật theo Excel khi trong app chưa ghi lần đóng tiền nào khác.
       const onlyExcel = (existing.payments ?? []).every(x => x.note === EXCEL_PAYMENT_NOTE);
-      if (onlyExcel) {
+      if (!withFees) {
+        // Tài khoản không có quyền học phí: không đụng tới học phí.
+      } else if (onlyExcel) {
         next.payments = excelPayments;
         next.tuitionFee = paid + owed;
       } else if (paid || owed) {
@@ -545,9 +600,9 @@ const importStudents = async (request, ctx) => {
       enrolledAt: '',
       classHistory: [],
       status: oneOf(row.status, STUDENT_STATUSES, 'dang_hoc'),
-      tuitionFee: paid + owed,
+      tuitionFee: withFees ? paid + owed : 0,
       discount: 0,
-      payments: excelPayments,
+      payments: withFees ? excelPayments : [],
       ...fields,
       createdAt: now(),
       updatedAt: now(),
@@ -589,12 +644,22 @@ const route = async (request, ctx) => {
   }
 
   if (resource === 'overview' && method === 'GET') {
-    requireAdmin(user);
-    return overview(ctx);
+    requirePerm(user, 'overview');
+    return overview(ctx, user);
   }
   if (resource === 'import' && id === 'students' && method === 'POST') {
-    requireAdmin(user);
-    return importStudents(request, ctx);
+    requirePerm(user, 'import');
+    return importStudents(request, ctx, user);
+  }
+
+  // Kế toán: chỉ sửa phần học phí của học viên.
+  if (resource === 'students' && id && parts[2] === 'fees' && method === 'PUT') {
+    requirePerm(user, 'fees');
+    const existing = await getOne(ctx.store, 'students', id, 'học viên');
+    const body = await readBody(request);
+    const item = { ...existing, ...feeFields(body), topikExam: text(body.topikExam ?? existing.topikExam, 160), updatedAt: now() };
+    await save(ctx.store, 'students', item);
+    return json({ item });
   }
 
   if (resource === 'my-classes' && method === 'GET') {
@@ -614,8 +679,11 @@ const route = async (request, ctx) => {
 
   const config = crud[resource];
   if (!config) throw new HttpError(404, 'Không tìm thấy đường dẫn.');
-  requireAdmin(user);
+  if (resource === 'teachers') requireAdmin(user);
+  else requirePerm(user, `${resource}:${method === 'GET' ? 'read' : 'write'}`);
+  const output = resource === 'students' && !can(user, 'fees') ? stripFees : config.output;
   const { store } = ctx;
+  ctx = { ...ctx, user };
 
   if (!id && method === 'GET') {
     const items = await listAll(store, resource);
@@ -624,24 +692,24 @@ const route = async (request, ctx) => {
       return json({ items: withCounts(items, students).sort((a, b) => a.code.localeCompare(b.code)) });
     }
     items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
-    return json({ items: items.map(config.output) });
+    return json({ items: items.map(output) });
   }
 
   if (!id && method === 'POST') {
     const item = await config.build(await readBody(request), ctx, null);
     await save(store, resource, item);
-    return json({ item: config.output(item) }, 201);
+    return json({ item: output(item) }, 201);
   }
 
   if (!id) throw new HttpError(405, 'Phương thức không được hỗ trợ.');
   const existing = await getOne(store, resource, id, config.label);
 
-  if (method === 'GET') return json({ item: config.output(existing) });
+  if (method === 'GET') return json({ item: output(existing) });
 
   if (method === 'PUT') {
     const item = await config.build(await readBody(request), ctx, existing);
     await save(store, resource, item);
-    return json({ item: config.output(item) });
+    return json({ item: output(item) });
   }
 
   if (method === 'DELETE') {

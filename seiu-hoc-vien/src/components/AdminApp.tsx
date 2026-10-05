@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { api } from '../api';
-import type { ClassRow, StudentRow, Teacher } from '../types';
+import type { ClassRow, Role, StudentRow, Teacher } from '../types';
 import { ClassesTab } from './ClassesTab';
 import { DashboardTab } from './DashboardTab';
 import { StudentsTab } from './StudentsTab';
-import { TeachersTab } from './TeachersTab';
+import { AccountsTab } from './TeachersTab';
 import { Timetable } from './Timetable';
 import { ErrorBox } from './ui';
 
@@ -14,21 +14,49 @@ export interface AdminData {
   teachers: Teacher[];
 }
 
+// Những gì mỗi vai trò được làm trên giao diện (máy chủ cũng kiểm tra lại).
+export interface Perms {
+  fees: boolean;
+  editStudents: boolean;
+  editClasses: boolean;
+  editAttendance: boolean;
+  accounts: boolean;
+}
+
+export const permsFor = (role: Role): Perms => ({
+  fees: role === 'admin' || role === 'accountant',
+  editStudents: role === 'admin' || role === 'staff',
+  editClasses: role === 'admin' || role === 'staff',
+  editAttendance: role === 'admin',
+  accounts: role === 'admin',
+});
+
 export interface AdminTabProps {
   data: AdminData;
   reload: () => Promise<void>;
+  perms: Perms;
 }
 
-const TABS = [
+const ALL_TABS = [
   { id: 'dashboard', label: 'Tổng quan' },
   { id: 'students', label: 'Học viên' },
   { id: 'classes', label: 'Lớp học' },
   { id: 'timetable', label: 'Thời khóa biểu' },
-  { id: 'teachers', label: 'Giáo viên' },
+  { id: 'accounts', label: 'Tài khoản' },
 ] as const;
-type TabId = (typeof TABS)[number]['id'];
+type TabId = (typeof ALL_TABS)[number]['id'];
 
-export const AdminApp = () => {
+const TABS_BY_ROLE: Record<Exclude<Role, 'teacher'>, TabId[]> = {
+  admin: ['dashboard', 'students', 'classes', 'timetable', 'accounts'],
+  staff: ['dashboard', 'students', 'classes', 'timetable'],
+  accountant: ['dashboard', 'students'],
+};
+
+export const AdminApp = ({ role }: { role: Exclude<Role, 'teacher'> }) => {
+  const perms = permsFor(role);
+  const TABS = ALL_TABS
+    .filter(t => TABS_BY_ROLE[role].includes(t.id))
+    .map(t => (role === 'accountant' && t.id === 'students' ? { ...t, label: 'Học phí học viên' } : t));
   const [tab, setTab] = useState<TabId>('dashboard');
   const [data, setData] = useState<AdminData | null>(null);
   const [error, setError] = useState('');
@@ -49,7 +77,7 @@ export const AdminApp = () => {
   const counts: Partial<Record<TabId, number>> = {
     students: data?.students.filter(s => s.status === 'dang_hoc').length,
     classes: data?.classes.filter(c => c.status === 'dang_mo').length,
-    teachers: data?.teachers.filter(t => t.active).length,
+    accounts: data?.teachers.filter(t => t.active).length,
   };
 
   return (
@@ -73,15 +101,15 @@ export const AdminApp = () => {
       {!data ? (
         <div className="muted center-pad">Đang tải dữ liệu…</div>
       ) : tab === 'dashboard' ? (
-        <DashboardTab data={data} goTo={setTab} />
+        <DashboardTab data={data} perms={perms} goTo={t => TABS.some(x => x.id === t) && setTab(t)} />
       ) : tab === 'students' ? (
-        <StudentsTab data={data} reload={reload} />
+        <StudentsTab data={data} reload={reload} perms={perms} />
       ) : tab === 'classes' ? (
-        <ClassesTab data={data} reload={reload} />
+        <ClassesTab data={data} reload={reload} perms={perms} />
       ) : tab === 'timetable' ? (
         <Timetable classes={data.classes.filter(c => c.status === 'dang_mo')} teachers={data.teachers} />
       ) : (
-        <TeachersTab data={data} reload={reload} />
+        <AccountsTab data={data} reload={reload} />
       )}
     </>
   );

@@ -1,7 +1,7 @@
 // Chế độ demo: chạy API ngay trong trình duyệt, dữ liệu lưu ở localStorage.
 import { handleApi } from '../server/api.mjs';
 
-const DB_KEY = 'seiu-hv-demo-db-v3';
+const DB_KEY = 'seiu-hv-demo-db-v4';
 type Db = Record<string, unknown>;
 
 let memory: Db | null = null;
@@ -54,6 +54,8 @@ export const DEMO_ACCOUNTS = [
   { label: 'Quản trị viên', username: 'admin', password: 'admin123' },
   { label: 'GV Kim Min-ji', username: 'kimminji', password: '123456' },
   { label: 'GV Nguyễn Thu Hà', username: 'thuha', password: '123456' },
+  { label: 'Nhân viên', username: 'nhanvien', password: '123456' },
+  { label: 'Kế toán', username: 'ketoan', password: '123456' },
 ];
 
 // ---------- Dữ liệu mẫu ----------
@@ -64,10 +66,12 @@ function seed(): Db {
     { id: 'gv_kim', fullName: 'Kim Min-ji', phone: '0938112233', username: 'kimminji', note: 'Giáo viên bản ngữ' },
     { id: 'gv_ha', fullName: 'Nguyễn Thu Hà', phone: '0907445566', username: 'thuha', note: '' },
     { id: 'gv_park', fullName: 'Park Ji-hoon', phone: '0966778899', username: 'parkjh', note: 'Phụ trách luyện thi TOPIK' },
+    { id: 'nv_tram', fullName: 'Lê Ngọc Trâm', phone: '0912000111', username: 'nhanvien', note: 'Giáo vụ', role: 'staff' },
+    { id: 'kt_mai', fullName: 'Trần Thị Mai', phone: '0912000222', username: 'ketoan', note: 'Kế toán', role: 'accountant' },
   ];
   for (const t of teachers) {
     db[`teachers/${t.id}`] = {
-      ...t, email: '', active: true, passwordHash: 'demo:123456', passwordVersion: 'v1', createdAt: stamp, updatedAt: stamp,
+      role: 'teacher', ...t, email: '', active: true, passwordHash: 'demo:123456', passwordVersion: 'v1', createdAt: stamp, updatedAt: stamp,
     };
   }
 

@@ -17,7 +17,7 @@ const markInfo = (mark?: AttendanceMark) => MARKS.find(m => m.value === mark);
 const today = () => new Date().toISOString().slice(0, 10);
 
 // Sổ điểm danh của một lớp: mỗi dòng là một học viên, mỗi cột là một buổi học.
-export const AttendanceBoard = ({ classId }: { classId: string }) => {
+export const AttendanceBoard = ({ classId, readOnly = false }: { classId: string; readOnly?: boolean }) => {
   const [data, setData] = useState<BoardData | null>(null);
   const [error, setError] = useState('');
   const [editing, setEditing] = useState<number | null>(null);
@@ -75,7 +75,7 @@ export const AttendanceBoard = ({ classId }: { classId: string }) => {
             <span key={m.value}><span className={`mark mark-${m.value}`}>{m.short}</span> {m.label}</span>
           ))}
         </div>
-        {nextNumber && (
+        {nextNumber && !readOnly && (
           <button type="button" className="btn btn-primary" onClick={() => setEditing(nextNumber)}>
             Điểm danh buổi {nextNumber}
           </button>
@@ -164,7 +164,8 @@ export const AttendanceBoard = ({ classId }: { classId: string }) => {
         </div>
       )}
 
-      {editing !== null && (
+      {readOnly && <p className="muted small">Chế độ chỉ xem: chỉ giáo viên phụ trách lớp và quản trị mới điểm danh được.</p>}
+      {editing !== null && !readOnly && (
         <SessionEditor
           key={editing}
           classId={classId}

@@ -1,5 +1,5 @@
 import { formatDate, formatMoney } from '../types';
-import type { AdminData } from './AdminApp';
+import type { AdminData, Perms } from './AdminApp';
 import { todayDay } from './Timetable';
 import { Badge, Empty } from './ui';
 
@@ -10,7 +10,7 @@ const todayIso = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-export const DashboardTab = ({ data, goTo }: { data: AdminData; goTo: GoTo }) => {
+export const DashboardTab = ({ data, goTo, perms }: { data: AdminData; goTo: GoTo; perms: Perms }) => {
   const today = todayIso();
   const month = today.slice(0, 7);
   const active = data.students.filter(s => s.status === 'dang_hoc');
@@ -20,8 +20,9 @@ export const DashboardTab = ({ data, goTo }: { data: AdminData; goTo: GoTo }) =>
 
   const payments = data.students.flatMap(s => (s.payments ?? []).map(p => ({ ...p, student: s })));
   const paidThisMonth = payments.filter(p => p.date.startsWith(month)).reduce((sum, p) => sum + p.amount, 0);
-  const owing = data.students.filter(s => s.stats.owed > 0).sort((a, b) => b.stats.owed - a.stats.owed);
-  const totalOwed = owing.reduce((sum, s) => sum + s.stats.owed, 0);
+  const owedOf = (s: AdminData['students'][number]) => s.stats.owed ?? 0;
+  const owing = data.students.filter(s => owedOf(s) > 0).sort((a, b) => owedOf(b) - owedOf(a));
+  const totalOwed = owing.reduce((sum, s) => sum + owedOf(s), 0);
   const absentees = active.filter(s => s.stats.absent >= 3).sort((a, b) => b.stats.absent - a.stats.absent);
   const recentPayments = payments.filter(p => p.date).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 8);
 
@@ -49,16 +50,16 @@ export const DashboardTab = ({ data, goTo }: { data: AdminData; goTo: GoTo }) =>
           <span className="kpi-value">{openClasses.length}</span>
           <span className="kpi-sub">{todayClasses.length} lớp có lịch hôm nay</span>
         </button>
-        <div className="kpi">
+        {perms.fees && <div className="kpi">
           <span className="kpi-label">Đã thu tháng {Number(month.slice(5))}</span>
           <span className="kpi-value">{formatMoney(paidThisMonth)}</span>
           <span className="kpi-sub">{payments.filter(p => p.date.startsWith(month)).length} lần đóng tiền</span>
-        </div>
-        <button type="button" className="kpi" onClick={() => goTo('students')}>
+        </div>}
+        {perms.fees && <button type="button" className="kpi" onClick={() => goTo('students')}>
           <span className="kpi-label">Còn nợ học phí</span>
           <span className={`kpi-value ${totalOwed ? 'text-red' : ''}`}>{formatMoney(totalOwed)}</span>
           <span className="kpi-sub">{owing.length} học viên</span>
-        </button>
+        </button>}
       </div>
 
       <div className="dash-grid">
@@ -151,6 +152,8 @@ export const DashboardTab = ({ data, goTo }: { data: AdminData; goTo: GoTo }) =>
           )}
         </section>
 
+        {perms.fees && (
+          <>
         <section className="panel">
           <div className="panel-head"><h2>Còn nợ học phí nhiều nhất</h2></div>
           {owing.length === 0 ? <p className="muted">Không có học viên nào còn nợ.</p> : (
@@ -158,7 +161,7 @@ export const DashboardTab = ({ data, goTo }: { data: AdminData; goTo: GoTo }) =>
               {owing.slice(0, 10).map(s => (
                 <li key={s.id}>
                   <span><b>{s.fullName}</b> <span className="muted small">{className(s.classId)}</span></span>
-                  <span className="text-red nowrap"><b>{formatMoney(s.stats.owed)}</b></span>
+                  <span className="text-red nowrap"><b>{formatMoney(owedOf(s))}</b></span>
                 </li>
               ))}
             </ul>
@@ -179,6 +182,8 @@ export const DashboardTab = ({ data, goTo }: { data: AdminData; goTo: GoTo }) =>
             </ul>
           )}
         </section>
+          </>
+        )}
       </div>
     </div>
   );

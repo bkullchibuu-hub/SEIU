@@ -58,7 +58,7 @@ export const LoginPage = ({ onLogin }: { onLogin: (user: User) => void }) => {
                 </button>
               ))}
             </div>
-            <span className="muted small">Mật khẩu: admin123 (admin) · 123456 (giáo viên)</span>
+            <span className="muted small">Mật khẩu: admin123 (admin) · 123456 (các tài khoản khác)</span>
           </div>
         )}
       </form>

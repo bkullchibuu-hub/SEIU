@@ -13,7 +13,7 @@ export const StudentCountBadge = ({ c }: { c: ClassRoom }) => (
   <Badge tone={c.studentCount >= c.capacity ? 'red' : 'gray'}>{c.studentCount}/{c.capacity}</Badge>
 );
 
-export const ClassesTab = ({ data, reload }: AdminTabProps) => {
+export const ClassesTab = ({ data, reload, perms }: AdminTabProps) => {
   const [editing, setEditing] = useState<ClassRoom | 'new' | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [showEnded, setShowEnded] = useState(false);
@@ -32,11 +32,11 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
           Hiện cả lớp đã kết thúc
         </label>
         <span className="spacer" />
-        <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>+ Tạo lớp</button>
+        {perms.editClasses && <button type="button" className="btn btn-primary" onClick={() => setEditing('new')}>+ Tạo lớp</button>}
       </div>
 
       {data.teachers.length === 0 && (
-        <div className="alert alert-info">Mẹo: hãy nhập giáo viên ở tab “Giáo viên” trước để có thể chọn giáo viên phụ trách khi tạo lớp.</div>
+        <div className="alert alert-info">Mẹo: hãy tạo tài khoản giáo viên ở tab “Tài khoản” trước để có thể chọn giáo viên phụ trách khi tạo lớp.</div>
       )}
 
       {rows.length === 0 ? (
@@ -65,8 +65,12 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
                   <td><Badge tone={c.status === 'dang_mo' ? 'green' : 'gray'}>{CLASS_STATUS_LABELS[c.status]}</Badge></td>
                   <td className="actions">
                     <button type="button" className="btn btn-sm" onClick={() => setViewingId(c.id)}>Học viên</button>
-                    <button type="button" className="btn btn-sm" onClick={() => setEditing(c)}>Sửa</button>
-                    <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setDeleting(c)}>Xóa</button>
+                    {perms.editClasses && (
+                      <>
+                        <button type="button" className="btn btn-sm" onClick={() => setEditing(c)}>Sửa</button>
+                        <button type="button" className="btn btn-sm btn-danger-ghost" onClick={() => setDeleting(c)}>Xóa</button>
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -79,7 +83,7 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
         <ClassForm klass={editing === 'new' ? null : editing} data={data} onClose={() => setEditing(null)} onSaved={reload} />
       )}
       {viewing && (
-        <ClassDetail klass={viewing} data={data} teacherName={teacherName(viewing.teacherId)} onClose={() => setViewingId(null)} reload={reload} />
+        <ClassDetail klass={viewing} data={data} perms={perms} teacherName={teacherName(viewing.teacherId)} onClose={() => setViewingId(null)} reload={reload} />
       )}
       {deleting && (
         <ConfirmDelete
@@ -96,7 +100,7 @@ export const ClassesTab = ({ data, reload }: AdminTabProps) => {
   );
 };
 
-const ClassDetail = ({ klass, data, teacherName, onClose, reload }: AdminTabProps & {
+const ClassDetail = ({ klass, data, teacherName, onClose, reload, perms }: AdminTabProps & {
   klass: ClassRoom;
   teacherName?: string;
   onClose: () => void;
@@ -123,11 +127,11 @@ const ClassDetail = ({ klass, data, teacherName, onClose, reload }: AdminTabProp
           Học viên <span className="tab-count">{students.length}</span>
         </button>
       </nav>
-      {view === 'attendance' ? <AttendanceBoard classId={klass.id} /> : (
+      {view === 'attendance' ? <AttendanceBoard classId={klass.id} readOnly={!perms.editAttendance} /> : (
       <>
       <div className="toolbar">
         <span className="spacer" />
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>+ Thêm học viên vào lớp</button>
+        {perms.editStudents && <button type="button" className="btn btn-primary btn-sm" onClick={() => setEditing('new')}>+ Thêm học viên vào lớp</button>}
       </div>
       {students.length === 0 ? (
         <Empty>Lớp chưa có học viên.</Empty>
@@ -140,7 +144,7 @@ const ClassDetail = ({ klass, data, teacherName, onClose, reload }: AdminTabProp
                 <tr key={s.id}>
                   <td className="muted">{i + 1}</td>
                   <td className="mono">{s.code}</td>
-                  <td><button type="button" className="link" onClick={() => setEditing(s)}>{s.fullName}</button></td>
+                  <td>{perms.editStudents ? <button type="button" className="link" onClick={() => setEditing(s)}>{s.fullName}</button> : s.fullName}</td>
                   <td className="nowrap">{formatPhone(s.phone)}</td>
                   <td className="nowrap">{formatDate(s.enrolledAt)}</td>
                   <td><StudentStatusBadge status={s.status} /></td>
@@ -157,6 +161,7 @@ const ClassDetail = ({ klass, data, teacherName, onClose, reload }: AdminTabProp
           student={editing === 'new' ? null : editing}
           classes={data.classes}
           presetClassId={klass.id}
+          canFees={perms.fees}
           onClose={() => setEditing(null)}
           onSaved={reload}
         />
@@ -199,7 +204,7 @@ const ClassForm = ({ klass, data, onClose, onSaved }: {
     }
   };
 
-  const teachers = data.teachers.filter(t => t.active || t.id === form.teacherId);
+  const teachers = data.teachers.filter(t => (t.role ?? 'teacher') === 'teacher' && (t.active || t.id === form.teacherId));
 
   return (
     <Modal title={klass ? `Sửa lớp ${klass.code}` : 'Tạo lớp mới'} onClose={onClose} wide>

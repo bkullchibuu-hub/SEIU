@@ -3,7 +3,7 @@ import { api, getToken, logout, setUnauthorizedHandler } from './api';
 import { AdminApp } from './components/AdminApp';
 import { LoginPage } from './components/LoginPage';
 import { TeacherApp } from './components/TeacherApp';
-import type { User } from './types';
+import { ROLE_INFO, type User } from './types';
 import logoUrl from './logo.svg';
 
 const DEMO = __DEMO__;
@@ -48,12 +48,12 @@ export const App = () => {
           <span>SEIU <small>Quản lý học viên</small></span>
         </div>
         <div className="topbar-user">
-          <span className="muted">{user.role === 'admin' ? 'Quản trị' : 'Giáo viên'}:</span> <b>{user.fullName}</b>
+          <span className="muted">{ROLE_INFO[user.role]?.label ?? ''}:</span> <b>{user.fullName}</b>
           <button type="button" className="btn btn-ghost btn-sm" onClick={signOut}>Đăng xuất</button>
         </div>
       </header>
       <main className="container">
-        {user.role === 'admin' ? <AdminApp /> : <TeacherApp />}
+        {user.role === 'teacher' ? <TeacherApp /> : <AdminApp key={user.id} role={user.role} />}
       </main>
     </div>
   );
